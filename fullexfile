@@ -1,0 +1,786 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Code, Trash2, Download, Copy, Check, Upload, FileCode, Play, Save, FolderOpen, Sparkles, BookOpen, Settings } from 'lucide-react';
+
+const PuterCodingChatbot = () => {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [puterReady, setPuterReady] = useState(false);
+  const [copied, setCopied] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [activeTab, setActiveTab] = useState('chat');
+  const [codeEditor, setCodeEditor] = useState('');
+  const [editorLanguage, setEditorLanguage] = useState('javascript');
+  const [executing, setExecuting] = useState(false);
+  const [executionResult, setExecutionResult] = useState('');
+  const [savedSnippets, setSavedSnippets] = useState([]);
+  const [aiModel, setAiModel] = useState('claude-3.5-sonnet');
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://js.puter.com/v2/';
+    script.async = true;
+    script.onload = async () => {
+      try {
+        await window.puter.auth.signIn();
+        setPuterReady(true);
+        loadHistory();
+        loadSnippets();
+      } catch (error) {
+        console.error('Puter auth error:', error);
+        setPuterReady(true);
+      }
+    };
+    document.head.appendChild(script);
+
+    return () => {
+      document.head.removeChild(script);
+    };
+  }, []);
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  const loadHistory = async () => {
+    try {
+      const history = await window.puter.kv.get('chat_history');
+      if (history) {
+        setMessages(JSON.parse(history));
+      }
+    } catch (error) {
+      console.log('No history found');
+    }
+  };
+
+  const saveHistory = async (msgs) => {
+    try {
+      await window.puter.kv.set('chat_history', JSON.stringify(msgs));
+    } catch (error) {
+      console.error('Error saving history:', error);
+    }
+  };
+
+  const loadSnippets = async () => {
+    try {
+      const snippets = await window.puter.kv.get('code_snippets');
+      if (snippets) {
+        setSavedSnippets(JSON.parse(snippets));
+      }
+    } catch (error) {
+      console.log('No snippets found');
+    }
+  };
+
+  const saveSnippets = async (snippets) => {
+    try {
+      await window.puter.kv.set('code_snippets', JSON.stringify(snippets));
+    } catch (error) {
+      console.error('Error saving snippets:', error);
+    }
+  };
+
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    const newFiles = [];
+
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        newFiles.push({
+          name: file.name,
+          content: text,
+          size: file.size,
+          type: file.type
+        });
+      } catch (error) {
+        console.error('Error reading file:', error);
+      }
+    }
+
+    setUploadedFiles([...uploadedFiles, ...newFiles]);
+    
+    if (newFiles.length > 0) {
+      const fileContext = newFiles.map(f => 
+        `File: ${f.name}\n\`\`\`\n${f.content}\n\`\`\``
+      ).join('\n\n');
+      
+      setInput(`Ho caricato questi file, puoi analizzarli:\n\n${fileContext}`);
+    }
+  };
+
+  const executeCode = async () => {
+    setExecuting(true);
+    setExecutionResult('');
+
+    try {
+      // Use Piston API for code execution (free!)
+      const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          language: editorLanguage,
+          version: '*',
+          files: [
+            {
+              name: `main.${editorLanguage}`,
+              content: codeEditor
+            }
+          ]
+        })
+      });
+
+      const data = await response.json();
+      
+      if (data.run) {
+        setExecutionResult(data.run.output || data.run.stderr || 'Esecuzione completata');
+      } else {
+        setExecutionResult('Errore durante l\'esecuzione');
+      }
+    } catch (error) {
+      setExecutionResult(`Errore: ${error.message}`);
+    } finally {
+      setExecuting(false);
+    }
+  };
+
+  const saveCodeSnippet = async () => {
+    const snippet = {
+      id: Date.now(),
+      code: codeEditor,
+      language: editorLanguage,
+      timestamp: new Date().toISOString()
+    };
+
+    const newSnippets = [...savedSnippets, snippet];
+    setSavedSnippets(newSnippets);
+    await saveSnippets(newSnippets);
+    
+    alert('Snippet salvato!');
+  };
+
+  const loadSnippet = (snippet) => {
+    setCodeEditor(snippet.code);
+    setEditorLanguage(snippet.language);
+    setActiveTab('editor');
+  };
+
+  const deleteSnippet = async (id) => {
+    const newSnippets = savedSnippets.filter(s => s.id !== id);
+    setSavedSnippets(newSnippets);
+    await saveSnippets(newSnippets);
+  };
+
+  const sendMessage = async () => {
+    if (!input.trim() || loading) return;
+
+    const userMessage = {
+      role: 'user',
+      content: input,
+      timestamp: new Date().toISOString(),
+      files: uploadedFiles.length > 0 ? uploadedFiles : null
+    };
+
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    setInput('');
+    setUploadedFiles([]);
+    setLoading(true);
+
+    try {
+      const context = newMessages.slice(-10).map(m => 
+        `${m.role}: ${m.content}`
+      ).join('\n\n');
+
+      const systemPrompt = `You are an expert coding assistant specialized in programming. You help with:
+- Code debugging and optimization
+- Explaining programming concepts
+- Writing clean, efficient code
+- Best practices and design patterns
+- Algorithm explanations
+- Code reviews
+
+Be concise but thorough. Format code with proper syntax highlighting using markdown code blocks.`;
+
+      const prompt = `${systemPrompt}\n\nConversation history:\n${context}\n\nRespond to the latest message. If code is involved, use proper markdown formatting with language tags.`;
+
+      const response = await window.puter.ai.chat(prompt, {
+        model: aiModel
+      });
+      
+      const assistantMessage = {
+        role: 'assistant',
+        content: response,
+        timestamp: new Date().toISOString()
+      };
+
+      const updatedMessages = [...newMessages, assistantMessage];
+      setMessages(updatedMessages);
+      saveHistory(updatedMessages);
+    } catch (error) {
+      console.error('Error:', error);
+      const errorMessage = {
+        role: 'assistant',
+        content: 'Si è verificato un errore. Riprova.',
+        timestamp: new Date().toISOString(),
+        error: true
+      };
+      const updatedMessages = [...newMessages, errorMessage];
+      setMessages(updatedMessages);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const generateCode = async (task) => {
+    setLoading(true);
+    try {
+      const prompt = `Generate clean, well-commented code for: ${task}. Include explanations.`;
+      const response = await window.puter.ai.chat(prompt, { model: aiModel });
+      
+      const assistantMessage = {
+        role: 'assistant',
+        content: response,
+        timestamp: new Date().toISOString()
+      };
+
+      const updatedMessages = [...messages, assistantMessage];
+      setMessages(updatedMessages);
+      saveHistory(updatedMessages);
+    } catch (error) {
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const clearHistory = async () => {
+    setMessages([]);
+    try {
+      await window.puter.kv.del('chat_history');
+    } catch (error) {
+      console.error('Error clearing history:', error);
+    }
+  };
+
+  const exportChat = () => {
+    const text = messages.map(m => 
+      `[${m.role.toUpperCase()}] ${new Date(m.timestamp).toLocaleString()}\n${m.content}\n\n`
+    ).join('---\n\n');
+    
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-export-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyCode = (content, index) => {
+    navigator.clipboard.writeText(content);
+    setCopied(index);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const formatMessage = (content) => {
+    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+
+    while ((match = codeBlockRegex.exec(content)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push({
+          type: 'text',
+          content: content.substring(lastIndex, match.index)
+        });
+      }
+      
+      parts.push({
+        type: 'code',
+        language: match[1] || 'text',
+        content: match[2].trim()
+      });
+      
+      lastIndex = match.index + match[0].length;
+    }
+
+    if (lastIndex < content.length) {
+      parts.push({
+        type: 'text',
+        content: content.substring(lastIndex)
+      });
+    }
+
+    return parts.length > 0 ? parts : [{ type: 'text', content }];
+  };
+
+  const quickActions = [
+    { icon: '🐛', text: 'Debug questo codice', action: 'Debug and fix issues in my code' },
+    { icon: '✨', text: 'Ottimizza codice', action: 'Optimize this code for better performance' },
+    { icon: '📚', text: 'Spiega concetto', action: 'Explain this programming concept in detail' },
+    { icon: '🔄', text: 'Refactoring', action: 'Refactor this code following best practices' },
+  ];
+
+  return (
+    <div className="flex flex-col h-screen bg-gray-900 text-gray-100">
+      {/* Header */}
+      <div className="bg-gray-800 border-b border-gray-700 p-4">
+        <div className="flex items-center justify-between max-w-7xl mx-auto">
+          <div className="flex items-center gap-3">
+            <div className="bg-gradient-to-r from-blue-600 to-purple-600 p-2 rounded-lg">
+              <Code size={24} />
+            </div>
+            <div>
+              <h1 className="text-xl font-semibold">Puter Pro Coding Assistant</h1>
+              <p className="text-sm text-gray-400">
+                {puterReady ? '🟢 AI Ready • File Upload • Code Execution' : '🔴 Connessione...'}
+              </p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setActiveTab('settings')}
+              className="p-2 hover:bg-gray-700 rounded-lg transition-colors"
+              title="Impostazioni"
+            >
+              <Settings size={20} />
+            </button>
+            <button
+              onClick={exportChat}
+              disabled={messages.length === 0}
+              className="p-2 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+              title="Esporta chat"
+            >
+              <Download size={20} />
+            </button>
+            <button
+              onClick={clearHistory}
+              disabled={messages.length === 0}
+              className="p-2 hover:bg-gray-700 rounded-lg transition-colors disabled:opacity-50"
+              title="Cancella cronologia"
+            >
+              <Trash2 size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mt-4 max-w-7xl mx-auto">
+          <button
+            onClick={() => setActiveTab('chat')}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              activeTab === 'chat' ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+          >
+            💬 Chat
+          </button>
+          <button
+            onClick={() => setActiveTab('editor')}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              activeTab === 'editor' ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+          >
+            <FileCode size={16} className="inline mr-1" /> Editor
+          </button>
+          <button
+            onClick={() => setActiveTab('snippets')}
+            className={`px-4 py-2 rounded-lg transition-colors ${
+              activeTab === 'snippets' ? 'bg-blue-600' : 'bg-gray-700 hover:bg-gray-600'
+            }`}
+          >
+            <BookOpen size={16} className="inline mr-1" /> Snippets ({savedSnippets.length})
+          </button>
+        </div>
+      </div>
+
+      {/* Content Area */}
+      <div className="flex-1 overflow-hidden">
+        {activeTab === 'chat' && (
+          <div className="h-full flex flex-col">
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {messages.length === 0 && (
+                <div className="text-center text-gray-400 mt-20">
+                  <div className="bg-gradient-to-r from-blue-600 to-purple-600 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Sparkles size={32} />
+                  </div>
+                  <h2 className="text-2xl font-semibold mb-2">AI Coding Assistant Avanzato</h2>
+                  <p className="mb-6">Carica file, esegui codice, salva snippet e molto altro!</p>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-4xl mx-auto mb-6">
+                    {quickActions.map((action, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => generateCode(action.action)}
+                        className="bg-gray-800 p-4 rounded-lg border border-gray-700 hover:border-blue-500 transition-colors text-left"
+                      >
+                        <div className="text-2xl mb-2">{action.icon}</div>
+                        <p className="text-sm">{action.text}</p>
+                      </button>
+                    ))}
+                  </div>
+
+                  <div className="max-w-2xl mx-auto text-left space-y-3">
+                    <div className="bg-gray-800 p-4 rounded-lg border border-gray-700">
+                      <h3 className="font-semibold mb-2">✨ Funzionalità Premium:</h3>
+                      <ul className="text-sm space-y-1 text-gray-300">
+                        <li>📁 Upload e analisi file di codice</li>
+                        <li>▶️ Esecuzione codice in tempo reale (50+ linguaggi)</li>
+                        <li>💾 Salvataggio snippet con memoria persistente</li>
+                        <li>🤖 AI multipla (Claude, GPT models)</li>
+                        <li>🎨 Code editor integrato</li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {messages.map((message, idx) => (
+                <div
+                  key={idx}
+                  className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                >
+                  <div
+                    className={`max-w-3xl rounded-lg p-4 ${
+                      message.role === 'user'
+                        ? 'bg-gradient-to-r from-blue-600 to-blue-700 text-white'
+                        : message.error
+                        ? 'bg-red-900 border border-red-700'
+                        : 'bg-gray-800 border border-gray-700'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="font-semibold text-sm">
+                        {message.role === 'user' ? '👤 Tu' : '🤖 Assistant'}
+                      </span>
+                      <span className="text-xs opacity-70">
+                        {new Date(message.timestamp).toLocaleTimeString()}
+                      </span>
+                    </div>
+                    
+                    {message.files && (
+                      <div className="mb-3 space-y-1">
+                        {message.files.map((file, fidx) => (
+                          <div key={fidx} className="text-xs bg-black bg-opacity-30 rounded px-2 py-1">
+                            📎 {file.name} ({(file.size / 1024).toFixed(2)} KB)
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
+                    <div className="space-y-3">
+                      {formatMessage(message.content).map((part, partIdx) => {
+                        if (part.type === 'code') {
+                          return (
+                            <div key={partIdx} className="relative">
+                              <div className="flex items-center justify-between bg-gray-950 px-3 py-2 rounded-t border border-gray-700">
+                                <span className="text-xs text-gray-400 font-mono">
+                                  {part.language}
+                                </span>
+                                <div className="flex gap-2">
+                                  <button
+                                    onClick={() => {
+                                      setCodeEditor(part.content);
+                                      setEditorLanguage(part.language);
+                                      setActiveTab('editor');
+                                    }}
+                                    className="p-1 hover:bg-gray-800 rounded transition-colors"
+                                    title="Apri nell'editor"
+                                  >
+                                    <FileCode size={14} />
+                                  </button>
+                                  <button
+                                    onClick={() => copyCode(part.content, `${idx}-${partIdx}`)}
+                                    className="p-1 hover:bg-gray-800 rounded transition-colors"
+                                  >
+                                    {copied === `${idx}-${partIdx}` ? (
+                                      <Check size={14} className="text-green-400" />
+                                    ) : (
+                                      <Copy size={14} />
+                                    )}
+                                  </button>
+                                </div>
+                              </div>
+                              <pre className="bg-gray-950 p-4 rounded-b border border-t-0 border-gray-700 overflow-x-auto">
+                                <code className="text-sm font-mono">{part.content}</code>
+                              </pre>
+                            </div>
+                          );
+                        }
+                        return (
+                          <p key={partIdx} className="whitespace-pre-wrap">
+                            {part.content}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {loading && (
+                <div className="flex justify-start">
+                  <div className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce"></div>
+                      <div className="w-2 h-2 bg-purple-500 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                      <div className="w-2 h-2 bg-blue-500 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div ref={messagesEndRef} />
+            </div>
+
+            {/* Input Area */}
+            <div className="border-t border-gray-700 bg-gray-800 p-4">
+              <div className="max-w-4xl mx-auto">
+                {uploadedFiles.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {uploadedFiles.map((file, idx) => (
+                      <div key={idx} className="bg-gray-700 px-3 py-1 rounded-full text-sm flex items-center gap-2">
+                        <FileCode size={14} />
+                        {file.name}
+                        <button
+                          onClick={() => setUploadedFiles(uploadedFiles.filter((_, i) => i !== idx))}
+                          className="hover:text-red-400"
+                        >
+                          ×
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="file"
+                    ref={fileInputRef}
+                    onChange={handleFileUpload}
+                    multiple
+                    className="hidden"
+                    accept=".js,.jsx,.ts,.tsx,.py,.java,.cpp,.c,.html,.css,.json,.xml,.md"
+                  />
+                  <button
+                    onClick={() => fileInputRef.current?.click()}
+                    className="bg-gray-700 hover:bg-gray-600 px-4 py-3 rounded-lg transition-colors"
+                    title="Carica file"
+                  >
+                    <Upload size={20} />
+                  </button>
+                  <input
+                    type="text"
+                    value={input}
+                    onChange={(e) => setInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && sendMessage()}
+                    placeholder="Chiedi aiuto, carica file, o scrivi codice..."
+                    disabled={!puterReady || loading}
+                    className="flex-1 bg-gray-900 border border-gray-700 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50"
+                  />
+                  <button
+                    onClick={sendMessage}
+                    disabled={!puterReady || loading || !input.trim()}
+                    className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-700 disabled:to-gray-700 disabled:opacity-50 px-6 py-3 rounded-lg transition-colors flex items-center gap-2"
+                  >
+                    <Send size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'editor' && (
+          <div className="h-full flex flex-col p-4">
+            <div className="max-w-6xl mx-auto w-full h-full flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-4">
+                  <select
+                    value={editorLanguage}
+                    onChange={(e) => setEditorLanguage(e.target.value)}
+                    className="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2"
+                  >
+                    <option value="javascript">JavaScript</option>
+                    <option value="python">Python</option>
+                    <option value="java">Java</option>
+                    <option value="cpp">C++</option>
+                    <option value="c">C</option>
+                    <option value="typescript">TypeScript</option>
+                    <option value="rust">Rust</option>
+                    <option value="go">Go</option>
+                    <option value="ruby">Ruby</option>
+                    <option value="php">PHP</option>
+                  </select>
+                  <span className="text-sm text-gray-400">
+                    {codeEditor.split('\n').length} linee
+                  </span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={saveCodeSnippet}
+                    disabled={!codeEditor.trim()}
+                    className="bg-green-600 hover:bg-green-700 disabled:opacity-50 px-4 py-2 rounded-lg flex items-center gap-2"
+                  >
+                    <Save size={16} />
+                    Salva Snippet
+                  </button>
+                  <button
+                    onClick={executeCode}
+                    disabled={!codeEditor.trim() || executing}
+                    className="bg-blue-600 hover:bg-blue-700 disabled:opacity-50 px-4 py-2 rounded-lg flex items-center gap-2"
+                  >
+                    <Play size={16} />
+                    {executing ? 'Esecuzione...' : 'Esegui'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 grid grid-cols-2 gap-4 min-h-0">
+                <div className="flex flex-col">
+                  <div className="bg-gray-800 px-3 py-2 rounded-t-lg border border-gray-700">
+                    <span className="text-sm font-semibold">Editor</span>
+                  </div>
+                  <textarea
+                    value={codeEditor}
+                    onChange={(e) => setCodeEditor(e.target.value)}
+                    placeholder="Scrivi il tuo codice qui..."
+                    className="flex-1 bg-gray-900 border border-t-0 border-gray-700 rounded-b-lg p-4 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                  />
+                </div>
+
+                <div className="flex flex-col">
+                  <div className="bg-gray-800 px-3 py-2 rounded-t-lg border border-gray-700">
+                    <span className="text-sm font-semibold">Output</span>
+                  </div>
+                  <pre className="flex-1 bg-gray-900 border border-t-0 border-gray-700 rounded-b-lg p-4 font-mono text-sm overflow-auto">
+                    {executionResult || 'Premi "Esegui" per vedere l\'output...'}
+                  </pre>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'snippets' && (
+          <div className="h-full overflow-y-auto p-4">
+            <div className="max-w-4xl mx-auto">
+              <h2 className="text-2xl font-semibold mb-4">Snippet Salvati</h2>
+              {savedSnippets.length === 0 ? (
+                <div className="text-center text-gray-400 py-20">
+                  <BookOpen size={48} className="mx-auto mb-4 opacity-50" />
+                  <p>Nessuno snippet salvato ancora</p>
+                  <p className="text-sm mt-2">Usa l'editor per salvare i tuoi snippet di codice</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {savedSnippets.map((snippet) => (
+                    <div key={snippet.id} className="bg-gray-800 border border-gray-700 rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <div className="flex items-center gap-3">
+                          <span className="bg-blue-600 px-3 py-1 rounded text-sm font-mono">
+                            {snippet.language}
+                          </span>
+                          <span className="text-sm text-gray-400">
+                            {new Date(snippet.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+                        <div className="flex gap-2">
+                          <button
+                            onClick={() => loadSnippet(snippet)}
+                            className="p-2 hover:bg-gray-700 rounded transition-colors"
+                            title="Carica nell'editor"
+                          >
+                            <FolderOpen size={16} />
+                          </button>
+                          <button
+                            onClick={() => copyCode(snippet.code, snippet.id)}
+                            className="p-2 hover:bg-gray-700 rounded transition-colors"
+                          >
+                            {copied === snippet.id ? (
+                              <Check size={16} className="text-green-400" />
+                            ) : (
+                              <Copy size={16} />
+                            )}
+                          </button>
+                          <button
+                            onClick={() => deleteSnippet(snippet.id)}
+                            className="p-2 hover:bg-red-900 rounded transition-colors text-red-400"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      <pre className="bg-gray-950 p-3 rounded border border-gray-700 overflow-x-auto">
+                        <code className="text-sm font-mono">{snippet.code.substring(0, 200)}{snippet.code.length > 200 ? '...' : ''}</code>
+                      </pre>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="h-full overflow-y-auto p-4">
+            <div className="max-w-2xl mx-auto">
+              <h2 className="text-2xl font-semibold mb-6">Impostazioni</h2>
+              
+              <div className="space-y-6">
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4">Modello AI</h3>
+                  <select
+                    value={aiModel}
+                    onChange={(e) => setAiModel(e.target.value)}
+                    className="w-full bg-gray-900 border border-gray-700 rounded-lg px-4 py-3"
+                  >
+                    <option value="claude-3.5-sonnet">Claude 3.5 Sonnet (Consigliato)</option>
+                    <option value="claude-3-opus">Claude 3 Opus</option>
+                    <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                    <option value="gpt-4">GPT-4</option>
+                  </select>
+                  <p className="text-sm text-gray-400 mt-2">
+                    Seleziona il modello AI da utilizzare per le risposte
+                  </p>
+                </div>
+
+                <div className="bg-gray-800 border border-gray-700 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4">Informazioni</h3>
+                  <div className="space-y-2 text-sm">
+                    <p><strong>Versione:</strong> 2.0.0</p>
+                    <p><strong>Storage:</strong> Puter KV (Illimitato)</p>
+                    <p><strong>Code Execution:</strong> Piston API (50+ linguaggi)</p>
+                    <p><strong>AI Provider:</strong> Puter.js (Gratuito)</p>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-r from-blue-900 to-purple-900 border border-blue-700 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-2">✨ Features Premium</h3>
+                  <ul className="space-y-2 text-sm">
+                    <li>✅ Memoria persistente illimitata</li>
+                    <li>✅ Upload multipli file</li>
+                    <li>✅ Esecuzione codice real-time</li>
+                    <li>✅ Salvataggio snippet</li>
+                    <li>✅ Modelli AI multipli</li>
+                    <li>✅ Editor integrato</li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+export default PuterCodingChatbot;

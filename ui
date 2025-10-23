@@ -1,0 +1,1197 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Puter Pro Coding Assistant</title>
+    <script src="https://js.puter.com/v2/"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+    <style>
+        :root {
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --accent-primary: #3b82f6;
+            --accent-secondary: #8b5cf6;
+            --border-color: #475569;
+            --success-color: #10b981;
+            --error-color: #ef4444;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        .header {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 1rem;
+        }
+
+        .header-content {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+
+        .logo-icon {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+        }
+
+        .btn:hover:not(:disabled) {
+            background: var(--accent-primary);
+            transform: translateY(-2px);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border: none;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 0.5rem;
+            margin-top: 1rem;
+            max-width: 1400px;
+            margin-left: auto;
+            margin-right: auto;
+            flex-wrap: wrap;
+        }
+
+        .tab {
+            padding: 0.75rem 1.5rem;
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+            border-color: transparent;
+        }
+
+        .content {
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .chat-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+        }
+
+        .message {
+            display: flex;
+            margin-bottom: 1.5rem;
+            animation: slideIn 0.3s ease;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .message.user {
+            justify-content: flex-end;
+        }
+
+        .message-content {
+            max-width: 70%;
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            word-wrap: break-word;
+        }
+
+        .message.user .message-content {
+            background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+        }
+
+        .message.assistant .message-content {
+            background: var(--bg-secondary);
+        }
+
+        .code-block {
+            position: relative;
+            margin: 1rem 0;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 0.5rem 1rem;
+            border-radius: 8px 8px 0 0;
+            font-size: 12px;
+        }
+
+        .code-actions {
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .code-actions button {
+            background: transparent;
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .code-actions button:hover {
+            background: var(--accent-primary);
+        }
+
+        pre[class*="language-"] {
+            margin: 0;
+            border-radius: 0 0 8px 8px;
+            max-height: 500px;
+            overflow: auto;
+        }
+
+        .input-area {
+            border-top: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            padding: 1rem;
+        }
+
+        .input-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            gap: 0.5rem;
+        }
+
+        .input-field {
+            flex: 1;
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 1rem;
+            border-radius: 12px;
+            font-size: 14px;
+            resize: none;
+            font-family: inherit;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+
+        .editor-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1rem;
+            padding: 1rem;
+            height: 100%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .editor-panel {
+            display: flex;
+            flex-direction: column;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+        }
+
+        .editor-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        #codeEditor {
+            flex: 1;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            padding: 1rem;
+            border: none;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            resize: none;
+        }
+
+        .editor-output {
+            flex: 1;
+            background: var(--bg-primary);
+            padding: 1rem;
+            overflow: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: flex;
+            gap: 0.5rem;
+            padding: 1rem;
+        }
+
+        .loading-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--accent-primary);
+            animation: bounce 1.4s infinite ease-in-out both;
+        }
+
+        .loading-dot:nth-child(1) { animation-delay: -0.32s; }
+        .loading-dot:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes bounce {
+            0%, 80%, 100% { transform: scale(0); }
+            40% { transform: scale(1); }
+        }
+
+        .toast {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+            animation: toastIn 0.3s ease;
+            z-index: 1000;
+        }
+
+        @keyframes toastIn {
+            from {
+                opacity: 0;
+                transform: translateY(-100px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .file-preview {
+            background: var(--bg-tertiary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 0.5rem 1rem;
+            margin: 0.5rem 0;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 14px;
+        }
+
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 400px;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 2rem;
+        }
+
+        .empty-state-icon {
+            font-size: 80px;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 1rem;
+            max-width: 1000px;
+            margin: 2rem auto;
+        }
+
+        .quick-action-btn {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            padding: 1.5rem;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-align: left;
+        }
+
+        .quick-action-btn:hover {
+            border-color: var(--accent-primary);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .quick-action-icon {
+            font-size: 32px;
+            margin-bottom: 0.5rem;
+        }
+
+        .snippets-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 1rem;
+            padding: 1rem;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .snippet-card {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .snippet-card:hover {
+            border-color: var(--accent-primary);
+            transform: translateY(-5px);
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+        }
+
+        .settings-container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .settings-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        select {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.75rem 1rem;
+            border-radius: 8px;
+            font-size: 14px;
+            width: 100%;
+        }
+
+        .feature-badge {
+            display: inline-block;
+            background: var(--success-color);
+            color: white;
+            padding: 0.25rem 0.75rem;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-right: 0.5rem;
+        }
+
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--accent-primary);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">💻</div>
+                    <div>
+                        <h1>Puter Pro Coding Assistant</h1>
+                        <p id="status" style="font-size: 12px; color: var(--text-secondary);">Connessione...</p>
+                    </div>
+                </div>
+                <div class="header-actions">
+                    <button class="btn" onclick="testConnection()">🔌 Test</button>
+                    <button class="btn" onclick="exportChat()" id="exportBtn">💾 Esporta</button>
+                    <button class="btn" onclick="clearHistory()" id="clearBtn">🗑️ Pulisci</button>
+                </div>
+            </div>
+            <div class="tabs">
+                <div class="tab active" onclick="switchTab('chat')">💬 Chat</div>
+                <div class="tab" onclick="switchTab('editor')">📝 Editor</div>
+                <div class="tab" onclick="switchTab('snippets')">📚 Snippets (<span id="snippetCount">0</span>)</div>
+                <div class="tab" onclick="switchTab('settings')">⚙️ Impostazioni</div>
+            </div>
+        </div>
+
+        <div class="content">
+            <!-- Chat Tab -->
+            <div id="chatTab" class="chat-container">
+                <div class="messages" id="messages">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✨</div>
+                        <h2>AI Coding Assistant Avanzato</h2>
+                        <p>Carica file, esegui codice, salva snippet e molto altro!</p>
+                        
+                        <div class="quick-actions">
+                            <div class="quick-action-btn" onclick="quickAction('Debug questo codice e trova tutti i problemi')">
+                                <div class="quick-action-icon">🐛</div>
+                                <h3>Debug Codice</h3>
+                                <p style="font-size: 14px; color: var(--text-secondary);">Trova e correggi bug</p>
+                            </div>
+                            <div class="quick-action-btn" onclick="quickAction('Ottimizza questo codice per migliori performance')">
+                                <div class="quick-action-icon">✨</div>
+                                <h3>Ottimizza</h3>
+                                <p style="font-size: 14px; color: var(--text-secondary);">Migliora le performance</p>
+                            </div>
+                            <div class="quick-action-btn" onclick="quickAction('Spiega questo concetto di programmazione in dettaglio')">
+                                <div class="quick-action-icon">📚</div>
+                                <h3>Spiega Concetto</h3>
+                                <p style="font-size: 14px; color: var(--text-secondary);">Impara nuove cose</p>
+                            </div>
+                            <div class="quick-action-btn" onclick="quickAction('Refactoring di questo codice seguendo le best practices')">
+                                <div class="quick-action-icon">🔄</div>
+                                <h3>Refactoring</h3>
+                                <p style="font-size: 14px; color: var(--text-secondary);">Codice più pulito</p>
+                            </div>
+                        </div>
+
+                        <div style="max-width: 600px; margin: 2rem auto;">
+                            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                                <h3 style="margin-bottom: 1rem;">✨ Funzionalità Premium:</h3>
+                                <ul style="list-style: none; padding: 0; text-align: left; font-size: 14px;">
+                                    <li style="margin-bottom: 0.5rem;">📎 Upload e analisi file di codice</li>
+                                    <li style="margin-bottom: 0.5rem;">▶️ Esecuzione codice in tempo reale (50+ linguaggi)</li>
+                                    <li style="margin-bottom: 0.5rem;">💾 Salvataggio snippet con memoria persistente</li>
+                                    <li style="margin-bottom: 0.5rem;">🤖 AI multipla (Claude, GPT models)</li>
+                                    <li style="margin-bottom: 0.5rem;">🎨 Code editor integrato</li>
+                                    <li style="margin-bottom: 0.5rem;">🔍 Debug e ottimizzazione assistita</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="input-area">
+                    <div class="input-container">
+                        <input type="file" id="fileInput" multiple style="display: none;" onchange="handleFileUpload(event)">
+                        <button class="btn" onclick="document.getElementById('fileInput').click()">📎</button>
+                        <textarea id="userInput" class="input-field" placeholder="Chiedi aiuto, carica file, o scrivi codice..." rows="1"></textarea>
+                        <button class="btn-primary btn" onclick="sendMessage()" id="sendBtn">🚀</button>
+                    </div>
+                    <div id="filePreview"></div>
+                </div>
+            </div>
+
+            <!-- Editor Tab -->
+            <div id="editorTab" class="editor-container" style="display: none;">
+                <div class="editor-panel">
+                    <div class="editor-header">
+                        <div style="display: flex; gap: 1rem; align-items: center;">
+                            <select id="languageSelect" onchange="updateLanguage()">
+                                <option value="javascript">JavaScript</option>
+                                <option value="python">Python</option>
+                                <option value="java">Java</option>
+                                <option value="cpp">C++</option>
+                                <option value="c">C</option>
+                                <option value="typescript">TypeScript</option>
+                                <option value="rust">Rust</option>
+                                <option value="go">Go</option>
+                                <option value="ruby">Ruby</option>
+                                <option value="php">PHP</option>
+                            </select>
+                            <span style="font-size: 14px; color: var(--text-secondary);">
+                                Linee: <span id="lineCount">0</span>
+                            </span>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn" onclick="saveSnippet()">💾 Salva</button>
+                            <button class="btn-primary btn" onclick="executeCode()" id="execBtn">▶️ Esegui</button>
+                        </div>
+                    </div>
+                    <textarea id="codeEditor" placeholder="// Scrivi il tuo codice qui..."></textarea>
+                </div>
+                <div class="editor-panel">
+                    <div class="editor-header">
+                        <span>Output</span>
+                    </div>
+                    <div class="editor-output" id="output">Premi "Esegui" per vedere l'output...</div>
+                </div>
+            </div>
+
+            <!-- Snippets Tab -->
+            <div id="snippetsTab" style="display: none; height: 100%; overflow-y: auto;">
+                <div class="snippets-grid" id="snippetsGrid">
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📚</div>
+                        <h2>Nessuno snippet salvato</h2>
+                        <p>Usa l'editor per salvare i tuoi snippet preferiti!</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settings Tab -->
+            <div id="settingsTab" style="display: none; height: 100%; overflow-y: auto;">
+                <div class="settings-container">
+                    <h2 style="margin-bottom: 2rem;">⚙️ Impostazioni</h2>
+                    
+                    <div class="settings-section">
+                        <h3 style="margin-bottom: 1rem;">🤖 Modello AI</h3>
+                        <select id="aiModelSelect">
+                            <option value="claude-3-5-sonnet">Claude 3.5 Sonnet (Consigliato)</option>
+                            <option value="claude-3-opus">Claude 3 Opus</option>
+                            <option value="claude-3-sonnet">Claude 3 Sonnet</option>
+                            <option value="gpt-4">GPT-4</option>
+                            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                        </select>
+                        <p style="font-size: 14px; color: var(--text-secondary); margin-top: 0.5rem;">
+                            Seleziona il modello AI da utilizzare per le risposte
+                        </p>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3 style="margin-bottom: 1rem;">ℹ️ Informazioni</h3>
+                        <div style="font-size: 14px; line-height: 2;">
+                            <p><strong>Versione:</strong> 2.0.0</p>
+                            <p><strong>Storage:</strong> Puter KV (Illimitato)</p>
+                            <p><strong>Code Execution:</strong> Piston API (50+ linguaggi)</p>
+                            <p><strong>AI Provider:</strong> Puter.js (Gratuito)</p>
+                        </div>
+                    </div>
+
+                    <div class="settings-section" style="background: linear-gradient(135deg, rgba(59, 130, 246, 0.1), rgba(139, 92, 246, 0.1)); border-color: var(--accent-primary);">
+                        <h3 style="margin-bottom: 1rem;">✨ Features Premium</h3>
+                        <ul style="list-style: none; padding: 0; font-size: 14px; line-height: 2;">
+                            <li><span class="feature-badge">✓</span> Memoria persistente illimitata</li>
+                            <li><span class="feature-badge">✓</span> Upload multipli file</li>
+                            <li><span class="feature-badge">✓</span> Esecuzione codice real-time</li>
+                            <li><span class="feature-badge">✓</span> Salvataggio snippet</li>
+                            <li><span class="feature-badge">✓</span> Modelli AI multipli</li>
+                            <li><span class="feature-badge">✓</span> Editor integrato</li>
+                            <li><span class="feature-badge">✓</span> Debug assistito</li>
+                            <li><span class="feature-badge">✓</span> Quick actions</li>
+                        </ul>
+                    </div>
+
+                    <div class="settings-section">
+                        <h3 style="margin-bottom: 1rem;">🔧 Azioni Manutenzione</h3>
+                        <div style="display: flex; gap: 1rem; flex-wrap: wrap;">
+                            <button class="btn" onclick="exportAllData()">📦 Esporta Tutto</button>
+                            <button class="btn" onclick="clearAllData()" style="background: var(--error-color);">🗑️ Reset Completo</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const DEBUG = true;
+        function log(...args) {
+            if (DEBUG) console.log('[DEBUG]', ...args);
+        }
+
+        let puterReady = false;
+        let messages = [];
+        let uploadedFiles = [];
+        let snippets = [];
+        let aiModel = 'claude-3-5-sonnet';
+
+        async function init() {
+            log('Inizializzazione...');
+            try {
+                if (typeof puter === 'undefined') {
+                    throw new Error('Puter SDK non caricato');
+                }
+
+                log('Puter SDK trovato, tentativo di login...');
+                await puter.auth.signIn();
+                puterReady = true;
+                
+                updateStatus('🟢 AI Ready • File Upload • Code Execution', 'success');
+                log('Login riuscito!');
+                
+                await loadHistory();
+                await loadSnippets();
+                loadSettings();
+                showToast('Sistema pronto! ✅');
+                
+            } catch (error) {
+                log('Errore inizializzazione:', error);
+                updateStatus('🔴 Errore: ' + error.message, 'error');
+                showToast('Errore di connessione!', true);
+            }
+        }
+
+        function updateStatus(text, type = 'normal') {
+            const status = document.getElementById('status');
+            status.textContent = text;
+            status.style.color = type === 'error' ? 'var(--error-color)' : 
+                                 type === 'success' ? 'var(--success-color)' : 
+                                 'var(--text-secondary)';
+        }
+
+        async function testConnection() {
+            log('Test connessione...');
+            try {
+                if (!puterReady) throw new Error('Puter non inizializzato');
+                
+                const testData = { test: 'value', timestamp: Date.now() };
+                await puter.kv.set('connection_test', JSON.stringify(testData));
+                const result = await puter.kv.get('connection_test');
+                
+                if (result) {
+                    showToast('✅ Connessione OK!');
+                    updateStatus('🟢 Test superato', 'success');
+                } else {
+                    throw new Error('Nessun dato ricevuto');
+                }
+            } catch (error) {
+                log('Test fallito:', error);
+                showToast('❌ Test fallito: ' + error.message, true);
+            }
+        }
+
+        async function loadHistory() {
+            try {
+                const history = await puter.kv.get('chat_history');
+                if (history) {
+                    messages = JSON.parse(history);
+                    log('Cronologia caricata:', messages.length, 'messaggi');
+                    renderMessages();
+                    updateButtonStates();
+                }
+            } catch (error) {
+                log('Nessuna cronologia trovata');
+            }
+        }
+
+        async function loadSnippets() {
+            try {
+                const saved = await puter.kv.get('code_snippets');
+                if (saved) {
+                    snippets = JSON.parse(saved);
+                    document.getElementById('snippetCount').textContent = snippets.length;
+                    log('Snippets caricati:', snippets.length);
+                    renderSnippets();
+                }
+            } catch (error) {
+                log('Nessuno snippet trovato');
+            }
+        }
+
+        function loadSettings() {
+            const savedModel = localStorage.getItem('ai_model');
+            if (savedModel) {
+                aiModel = savedModel;
+                document.getElementById('aiModelSelect').value = savedModel;
+            }
+        }
+
+        document.getElementById('aiModelSelect')?.addEventListener('change', (e) => {
+            aiModel = e.target.value;
+            localStorage.setItem('ai_model', aiModel);
+            showToast('Modello cambiato: ' + aiModel);
+            log('Modello AI cambiato:', aiModel);
+        });
+
+        function handleFileUpload(event) {
+            const files = Array.from(event.target.files);
+            log('File caricati:', files.length);
+            
+            const preview = document.getElementById('filePreview');
+            
+            files.forEach(file => {
+                if (file.size > 5 * 1024 * 1024) {
+                    showToast(`File ${file.name} troppo grande (max 5MB)`, true);
+                    return;
+                }
+
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    uploadedFiles.push({
+                        name: file.name,
+                        content: e.target.result,
+                        type: file.type,
+                        size: file.size
+                    });
+                    
+                    log('File letto:', file.name, file.size, 'bytes');
+                    renderFilePreview();
+                };
+                
+                reader.onerror = (error) => {
+                    log('Errore lettura file:', error);
+                    showToast(`Errore lettura ${file.name}`, true);
+                };
+                
+                reader.readAsText(file);
+            });
+            
+            showToast(`${files.length} file caricati! 📎`);
+        }
+
+        function removeFile(name) {
+            log('Rimozione file:', name);
+            uploadedFiles = uploadedFiles.filter(f => f.name !== name);
+            renderFilePreview();
+        }
+
+        function renderFilePreview() {
+            const preview = document.getElementById('filePreview');
+            preview.innerHTML = '';
+            uploadedFiles.forEach(f => {
+                const fileDiv = document.createElement('div');
+                fileDiv.className = 'file-preview';
+                fileDiv.innerHTML = `
+                    📄 ${f.name} (${(f.size / 1024).toFixed(2)} KB)
+                    <button onclick="removeFile('${f.name.replace(/'/g, "\\'")}')" 
+                            style="margin-left: auto; background: transparent; border: none; 
+                                   color: var(--error-color); cursor: pointer; font-size: 18px;">×</button>
+                `;
+                preview.appendChild(fileDiv);
+            });
+        }
+
+        function quickAction(prompt) {
+            document.getElementById('userInput').value = prompt;
+            sendMessage();
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('userInput');
+            const sendBtn = document.getElementById('sendBtn');
+            const text = input.value.trim();
+            
+            if (!text) {
+                showToast('Scrivi qualcosa!', true);
+                return;
+            }
+            
+            if (!puterReady) {
+                showToast('Sistema non pronto!', true);
+                return;
+            }
+            
+            log('Invio messaggio:', text.substring(0, 50) + '...');
+            
+            sendBtn.disabled = true;
+            input.disabled = true;
+            
+            let fullContent = text;
+            if (uploadedFiles.length > 0) {
+                const fileContext = uploadedFiles.map(f => 
+                    `File: ${f.name}\n\`\`\`\n${f.content.substring(0, 5000)}\n\`\`\``
+                ).join('\n\n');
+                fullContent = `${text}\n\n[File caricati]\n${fileContext}`;
+            }
+
+            const userMsg = {
+                role: 'user',
+                content: text,
+                files: uploadedFiles.length > 0 ? uploadedFiles.map(f => ({name: f.name, size: f.size})) : null,
+                timestamp: new Date().toISOString()
+            };
+            
+            messages.push(userMsg);
+            input.value = '';
+            uploadedFiles = [];
+            document.getElementById('filePreview').innerHTML = '';
+            
+            renderMessages();
+            showLoading();
+            updateButtonStates();
+            
+            try {
+                log('Chiamata AI in corso con modello:', aiModel);
+                const context = messages.slice(-10).map(m => `${m.role}: ${m.content}`).join('\n\n');
+                
+                const systemPrompt = `You are an expert coding assistant specialized in programming. You help with:
+- Code debugging and optimization
+- Explaining programming concepts
+- Writing clean, efficient code
+- Best practices and design patterns
+- Algorithm explanations
+- Code reviews
+
+Be concise but thorough. Format code with proper syntax highlighting using markdown code blocks.`;
+
+                const prompt = `${systemPrompt}\n\nConversation history:\n${context}\n\nRespond to the latest message. If code is involved, use proper markdown formatting with language tags.`;
+                
+                const response = await puter.ai.chat(fullContent, { model: aiModel });
+                log('Risposta ricevuta:', response.substring(0, 100) + '...');
+                
+                const assistantMsg = {
+                    role: 'assistant',
+                    content: response,
+                    timestamp: new Date().toISOString()
+                };
+                
+                messages.push(assistantMsg);
+                await puter.kv.set('chat_history', JSON.stringify(messages));
+                
+                removeLoading();
+                renderMessages();
+                showToast('Risposta ricevuta! ✅');
+                
+            } catch (error) {
+                log('Errore AI:', error);
+                removeLoading();
+                showToast('Errore: ' + error.message, true);
+                
+                messages.push({
+                    role: 'assistant',
+                    content: `❌ Errore: ${error.message}`,
+                    timestamp: new Date().toISOString(),
+                    error: true
+                });
+                renderMessages();
+            } finally {
+                sendBtn.disabled = false;
+                input.disabled = false;
+                input.focus();
+                updateButtonStates();
+            }
+        }
+
+        function renderMessages() {
+            const container = document.getElementById('messages');
+            
+            if (messages.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">✨</div>
+                        <h2>AI Coding Assistant Avanzato</h2>
+                        <p>Carica file, esegui codice, salva snippet e molto altro!</p>
+                        
+                        <div class="quick-actions">
+                            <div class="quick-action-btn" onclick="quickAction('Debug questo codice e trova tutti i problemi')">
+                                <div class="quick-action-icon">🐛</div>
+                                <h3>Debug Codice</h3>
+                                <p style="font-size: 14px; color: var(--text-secondary);">Trova e correggi bug</p>
+                            </div>
+                            <div class="quick-action-btn" onclick="quickAction('Ottimizza questo codice per migliori performance')">
+                                <div class="quick-action-icon">✨</div>
+                                <h3>Ottimizza</h3>
+                                <p style="font-size: 14px; color: var(--text-secondary);">Migliora le performance</p>
+                            </div>
+                            <div class="quick-action-btn" onclick="quickAction('Spiega questo concetto di programmazione in dettaglio')">
+                                <div class="quick-action-icon">📚</div>
+                                <h3>Spiega Concetto</h3>
+                                <p style="font-size: 14px; color: var(--text-secondary);">Impara nuove cose</p>
+                            </div>
+                            <div class="quick-action-btn" onclick="quickAction('Refactoring di questo codice seguendo le best practices')">
+                                <div class="quick-action-icon">🔄</div>
+                                <h3>Refactoring</h3>
+                                <p style="font-size: 14px; color: var(--text-secondary);">Codice più pulito</p>
+                            </div>
+                        </div>
+
+                        <div style="max-width: 600px; margin: 2rem auto;">
+                            <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 12px; padding: 1.5rem;">
+                                <h3 style="margin-bottom: 1rem;">✨ Funzionalità Premium:</h3>
+                                <ul style="list-style: none; padding: 0; text-align: left; font-size: 14px;">
+                                    <li style="margin-bottom: 0.5rem;">📎 Upload e analisi file di codice</li>
+                                    <li style="margin-bottom: 0.5rem;">▶️ Esecuzione codice in tempo reale (50+ linguaggi)</li>
+                                    <li style="margin-bottom: 0.5rem;">💾 Salvataggio snippet con memoria persistente</li>
+                                    <li style="margin-bottom: 0.5rem;">🤖 AI multipla (Claude, GPT models)</li>
+                                    <li style="margin-bottom: 0.5rem;">🎨 Code editor integrato</li>
+                                    <li style="margin-bottom: 0.5rem;">🔍 Debug e ottimizzazione assistita</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                return;
+            }
+            
+            container.innerHTML = '';
+            
+            messages.forEach((msg, idx) => {
+                const div = document.createElement('div');
+                div.className = `message ${msg.role}`;
+                
+                let content = escapeHtml(msg.content);
+                
+                content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (match, lang, code) => {
+                    lang = lang || 'javascript';
+                    const codeId = `code-${idx}-${Math.random().toString(36).substr(2, 9)}`;
+                    
+                    try {
+                        const highlighted = Prism.highlight(
+                            code.trim(), 
+                            Prism.languages[lang] || Prism.languages.javascript, 
+                            lang
+                        );
+                        
+                        return `
+                            <div class="code-block">
+                                <div class="code-header">
+                                    <span>${lang}</span>
+                                    <div class="code-actions">
+                                        <button onclick="openInEditor('${codeId}', '${lang}')">📝 Editor</button>
+                                        <button onclick="copyCode('${codeId}')">📋 Copia</button>
+                                    </div>
+                                </div>
+                                <pre class="language-${lang}"><code id="${codeId}" class="language-${lang}">${highlighted}</code></pre>
+                            </div>
+                        `;
+                    } catch (e) {
+                        log('Errore highlight:', e);
+                        return `<pre><code id="${codeId}">${escapeHtml(code)}</code></pre>`;
+                    }
+                });
+                
+                content = content.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+                content = content.replace(/\*(.+?)\*/g, '<em>$1</em>');
+                content = content.replace(/`(.+?)`/g, '<code style="background: rgba(0,0,0,0.3); padding: 2px 6px; border-radius: 4px;">$1</code>');
+                content = content.replace(/\n/g, '<br>');
+                
+                div.innerHTML = `
+                    <div class="message-content" style="${msg.error ? 'border-color: var(--error-color);' : ''}">
+                        <div style="font-size: 12px; opacity: 0.7; margin-bottom: 0.5rem;">
+                            ${msg.role === 'user' ? '👤 Tu' : '🤖 Assistant'} • 
+                            ${new Date(msg.timestamp).toLocaleTimeString()}
+                        </div>
+                        ${msg.files ? `<div style="font-size: 12px; margin-bottom: 0.5rem;">${msg.files.map(f => `📎 ${f.name}`).join(', ')}</div>` : ''}
+                        <div>${content}</div>
+                    </div>
+                `;
+                
+                container.appendChild(div);
+            });
+            
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function showLoading() {
+            const container = document.getElementById('messages');
+            const loading = document.createElement('div');
+            loading.className = 'message assistant';
+            loading.id = 'loadingMsg';
+            loading.innerHTML = `
+                <div class="message-content">
+                    <div class="loading">
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                        <div class="loading-dot"></div>
+                    </div>
+                </div>
+            `;
+            container.appendChild(loading);
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function removeLoading() {
+            const loading = document.getElementById('loadingMsg');
+            if (loading) loading.remove();
+        }
+
+        function copyCode(codeId) {
+            const codeElement = document.getElementById(codeId);
+            if (!codeElement) return;
+            
+            const code = codeElement.textContent;
+            navigator.clipboard.writeText(code).then(() => {
+                showToast('Codice copiato! 📋');
+            }).catch(err => {
+                log('Errore copia:', err);
+                showToast('Errore copia!', true);
+            });
+        }
+
+        function openInEditor(codeId, lang) {
+            const codeElement = document.getElementById(codeId);
+            if (!codeElement) return;
+            
+            document.getElementById('codeEditor').value = codeElement.textContent;
+            document.getElementById('languageSelect').value = lang;
+            switchTab('editor');
+            showToast('Aperto nell\'editor! 📝');
+        }
+
+        document.getElementById('codeEditor').addEventListener('input', (e) => {
+            const lines = e.target.value.split('\n').length;
+            document.getElementById('lineCount').textContent = lines;
+        });
+
+        async function executeCode() {
+            const code = document.getElementById('codeEditor').value;
+            const lang = document.getElementById('languageSelect').value;
+            const output = document.getElementById('output');
+            const execBtn = document.getElementById('execBtn');
+            
+            if (!code.trim()) return;
+            
+            execBtn.disabled = true;
+            output.textContent = 'Esecuzione in corso...';
+            
+            try {
+                log('Esecuzione codice:', lang);
+                const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        language: lang,
+                        version: '*',
+                        files: [{ name: `main.${lang}`, content: code }]
+                    })
+                });
+                
+                const data = await response.json();
+                output.textContent = data.run?.output || data.run?.stderr || 'Esecuzione completata';
+                log('Output ricevuto');
+            } catch (error) {
+                output.textContent = `Errore: ${error.message}`;
+                log('Errore esecuzione:', error);
+            } finally {
+                execBtn.disabled = false;
+            }
+        }
+
+        async function saveSnippet() {
+            const code = document.getElementById('codeEditor').value;
+            const lang = document.getElementById('languageSelect').value;
+            
+            if (!code.trim()) {
+                showToast('Scrivi del codice prima!', true);
+                return;
+            }
+            
+            const snippet = {
+                id: Date.now(),
+                code,
+                language: lang,
+                timestamp: new Date().toISOString()
+            };
+            
+            snippets.push(snippet);
+            await puter.kv.set('code_snippets', JSON.stringify(snippets));
+            
+            document.getElementById('snippetCount').textContent = snippets.length;
+            renderSnippets();
+            showToast('Snippet salvato! 💾');
+            log('Snippet salvato:', snippet.id);
+        }
+
+        function renderSnippets() {
+            const grid = document.getElementById('snippetsGrid');
+            
+            if (snippets.length === 0) {
+                grid.innerHTML = `
+                    <div class="empty-state">
+                        <div class="empty-state-icon">📚</div>
+                        <h2>Nessuno snippet salvato</h2>
+                        <p>Usa l'editor per salvare i tuoi snippet preferiti!</p>
+                    </div>
+                `;
+                return;
+            }
+            
+            grid.innerHTML = '';
+            
+            snippets.forEach(snippet => {
+                const card = document.createElement('div');
+                card.className = 'snippet-card';
+                card.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 1rem; align-items: center;">
+                        <span style="background: var(--accent-primary); padding: 0.25rem 0.75rem; border-radius: 4px; font-size: 12px;">
+                            ${snippet.language}
+                        </span>
+                        <div style="display: flex; gap: 0.5rem;">
+                            <button class="btn" style="padding: 0.25rem 0.5rem;" onclick="loadSnippet(${snippet.id})">📝</button>
+                            <button class="btn" style="padding: 0.25rem 0.5rem;" onclick="deleteSnippet(${snippet.id})">🗑️</button>
+                        </div>
+                    </div>
+                    <pre style="background: var(--bg-primary); padding: 1rem; border-radius: 8px; overflow-x: auto; font-size: 12px; max-height: 200px;"><code>${escapeHtml(snippet.code.substring(0, 300))}${snippet.code.length > 300 ? '...' : ''}</code></pre>
+                    <div style="font-size: 12px; color: var(--text-secondary); margin-top: 0.5rem;">
