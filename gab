@@ -1,0 +1,700 @@
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, Code, Trash2, Download, Copy, Check, Upload, FileCode, Play, Save, FolderOpen, Sparkles, BookOpen, Settings, Zap, Bug, RefreshCw, BookmarkPlus, Search, Menu, X, Plus, ChevronDown, MessageSquare, User, Bot, Terminal, Cpu, Edit, Share2, AlertCircle, ExternalLink, Folder, File, Image as Img, Music, Video } from 'lucide-react';
+
+const PuterCodingAssistant = () => {
+  const [messages, setMessages] = useState([]);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [puterReady, setPuterReady] = useState(false);
+  const [copied, setCopied] = useState(null);
+  const [uploadedFiles, setUploadedFiles] = useState([]);
+  const [activeTab, setActiveTab] = useState('chat');
+  const [codeEditor, setCodeEditor] = useState('');
+  const [editorLanguage, setEditorLanguage] = useState('javascript');
+  const [executing, setExecuting] = useState(false);
+  const [executionResult, setExecutionResult] = useState('');
+  const [savedSnippets, setSavedSnippets] = useState([]);
+  const [aiModel, setAiModel] = useState('claude-3-5-sonnet');
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [conversations, setConversations] = useState([]);
+  const [currentConversationId, setCurrentConversationId] = useState(null);
+  const [showModelSelector, setShowModelSelector] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [puterFiles, setPuterFiles] = useState([]);
+  const [currentPath, setCurrentPath] = useState('/');
+  const [showFileManager, setShowFileManager] = useState(false);
+  const [userInfo, setUserInfo] = useState(null);
+  const messagesEndRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  // Initialize Puter SDK
+  useEffect(() => {
+    const script = document.createElement('script');
+    script.src = 'https://js.puter.com/v2/';
+    script.async = true;
+    script.onload = async () => {
+      try {
+        await window.puter.auth.signIn();
+        setPuterReady(true);
+        
+        // Get user info
+        const user = await window.puter.auth.getUser();
+        setUserInfo(user);
+        
+        await loadConversations();
+        await loadSnippets();
+        await loadPuterFiles();
+        showToast('🎉 Connected to Puter!', 'success');
+      } catch (error) {
+        setPuterReady(true);
+        showToast('⚠️ Limited mode', 'warning');
+      }
+    };
+    document.head.appendChild(script);
+    return () => { if (document.head.contains(script)) document.head.removeChild(script); };
+  }, []);
+
+  useEffect(() => { scrollToBottom(); }, [messages]);
+
+  const scrollToBottom = () => { messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' }); };
+
+  const showToast = (message, type = 'info') => {
+    const colors = { success: 'bg-green-600', error: 'bg-red-600', warning: 'bg-yellow-600', info: 'bg-blue-600' };
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 ${colors[type]} text-white px-6 py-3 rounded-lg shadow-2xl z-50`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  };
+
+  // Puter KV Operations
+  const loadConversations = async () => {
+    try {
+      const data = await window.puter.kv.get('conversations');
+      if (data) {
+        const parsed = JSON.parse(data);
+        setConversations(parsed);
+        if (parsed.length > 0 && !currentConversationId) loadConversation(parsed[0].id);
+      }
+    } catch (error) { console.log('No conversations'); }
+  };
+
+  const saveConversations = async (convs) => {
+    try { await window.puter.kv.set('conversations', JSON.stringify(convs)); }
+    catch (error) { console.error('Save error:', error); }
+  };
+
+  const loadSnippets = async () => {
+    try {
+      const snippets = await window.puter.kv.get('code_snippets');
+      if (snippets) setSavedSnippets(JSON.parse(snippets));
+    } catch (error) { console.log('No snippets'); }
+  };
+
+  const saveSnippets = async (snippets) => {
+    try { await window.puter.kv.set('code_snippets', JSON.stringify(snippets)); }
+    catch (error) { console.error('Save error:', error); }
+  };
+
+  // Puter Filesystem Operations
+  const loadPuterFiles = async () => {
+    try {
+      const files = await window.puter.fs.readdir(currentPath);
+      setPuterFiles(files);
+    } catch (error) { console.log('No files'); }
+  };
+
+  const saveToPuter = async (filename, content) => {
+    try {
+      await window.puter.fs.write(filename, content);
+      showToast(`✓ Saved to Puter: ${filename}`, 'success');
+      await loadPuterFiles();
+    } catch (error) { showToast('❌ Save failed', 'error'); }
+  };
+
+  const readFromPuter = async (filename) => {
+    try {
+      const content = await window.puter.fs.read(filename);
+      return content;
+    } catch (error) { showToast('❌ Read failed', 'error'); return null; }
+  };
+
+  // Conversation Management
+  const createNewConversation = () => {
+    const newConv = { id: Date.now(), title: 'New Chat', messages: [], timestamp: new Date().toISOString() };
+    const updated = [newConv, ...conversations];
+    setConversations(updated);
+    setCurrentConversationId(newConv.id);
+    setMessages([]);
+    saveConversations(updated);
+  };
+
+  const loadConversation = (id) => {
+    const conv = conversations.find(c => c.id === id);
+    if (conv) { setCurrentConversationId(id); setMessages(conv.messages || []); }
+  };
+
+  const updateConversationTitle = (id, firstMessage) => {
+    const updated = conversations.map(c => c.id === id && c.title === 'New Chat' ? { ...c, title: firstMessage.substring(0, 40) + '...' } : c);
+    setConversations(updated);
+    saveConversations(updated);
+  };
+
+  const deleteConversation = async (id) => {
+    const updated = conversations.filter(c => c.id !== id);
+    setConversations(updated);
+    await saveConversations(updated);
+    if (currentConversationId === id) {
+      if (updated.length > 0) loadConversation(updated[0].id);
+      else createNewConversation();
+    }
+  };
+
+  // File Upload
+  const handleFileUpload = async (e) => {
+    const files = Array.from(e.target.files);
+    const newFiles = [];
+    for (const file of files) {
+      if (file.size > 5 * 1024 * 1024) { showToast(`❌ ${file.name} too large`, 'error'); continue; }
+      try {
+        const text = await file.text();
+        newFiles.push({ name: file.name, content: text, size: file.size });
+      } catch (error) { showToast('❌ Read error', 'error'); }
+    }
+    setUploadedFiles([...uploadedFiles, ...newFiles]);
+    if (newFiles.length > 0) showToast(`✓ ${newFiles.length} files uploaded`, 'success');
+  };
+
+  // Code Execution
+  const executeCode = async () => {
+    if (!codeEditor.trim()) { showToast('⚠️ Write code first', 'warning'); return; }
+    setExecuting(true);
+    setExecutionResult('⏳ Executing...');
+    try {
+      const response = await fetch('https://emkc.org/api/v2/piston/execute', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: editorLanguage, version: '*', files: [{ name: `main.${editorLanguage}`, content: codeEditor }] })
+      });
+      const data = await response.json();
+      if (data.run) {
+        setExecutionResult(`✓ Executed\n\n${data.run.output || data.run.stderr || 'Completed'}`);
+        showToast('✓ Code executed!', 'success');
+      } else throw new Error('No output');
+    } catch (error) {
+      setExecutionResult(`❌ Error: ${error.message}`);
+      showToast('❌ Execution failed', 'error');
+    } finally { setExecuting(false); }
+  };
+
+  // Snippet Management
+  const saveCodeSnippet = async () => {
+    if (!codeEditor.trim()) { showToast('⚠️ Write code', 'warning'); return; }
+    const snippet = { id: Date.now(), code: codeEditor, language: editorLanguage, timestamp: new Date().toISOString(), lines: codeEditor.split('\n').length };
+    const newSnippets = [...savedSnippets, snippet];
+    setSavedSnippets(newSnippets);
+    await saveSnippets(newSnippets);
+    showToast('✓ Snippet saved!', 'success');
+  };
+
+  const loadSnippet = (snippet) => {
+    setCodeEditor(snippet.code);
+    setEditorLanguage(snippet.language);
+    setActiveTab('editor');
+  };
+
+  const deleteSnippet = async (id) => {
+    const newSnippets = savedSnippets.filter(s => s.id !== id);
+    setSavedSnippets(newSnippets);
+    await saveSnippets(newSnippets);
+    showToast('✓ Deleted', 'success');
+  };
+
+  // AI Chat
+  const sendMessage = async () => {
+    if (!input.trim() || loading || !puterReady) return;
+
+    const userMessage = { role: 'user', content: input, timestamp: new Date().toISOString(), files: uploadedFiles.length > 0 ? uploadedFiles : null };
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
+    
+    if (!currentConversationId) createNewConversation();
+    if (messages.length === 0) updateConversationTitle(currentConversationId || Date.now(), input);
+
+    setInput('');
+    setUploadedFiles([]);
+    setLoading(true);
+
+    try {
+      let fullContent = input;
+      if (uploadedFiles.length > 0) {
+        const fileContext = uploadedFiles.map(f => `\n\nFile: ${f.name}\n\`\`\`\n${f.content}\n\`\`\``).join('');
+        fullContent = input + fileContext;
+      }
+
+      const response = await window.puter.ai.chat(fullContent, { model: aiModel });
+      const assistantMessage = { role: 'assistant', content: response, timestamp: new Date().toISOString() };
+      const updatedMessages = [...newMessages, assistantMessage];
+      setMessages(updatedMessages);
+      
+      const updated = conversations.map(c => c.id === currentConversationId ? { ...c, messages: updatedMessages } : c);
+      setConversations(updated);
+      await saveConversations(updated);
+      showToast('✓ Response received', 'success');
+    } catch (error) {
+      showToast('❌ Error', 'error');
+    } finally { setLoading(false); }
+  };
+
+  const exportChat = () => {
+    const text = messages.map(m => `[${m.role.toUpperCase()}]\n${m.content}\n\n`).join('---\n\n');
+    const blob = new Blob([text], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `chat-${Date.now()}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  const copyCode = (content, index) => {
+    navigator.clipboard.writeText(content);
+    setCopied(index);
+    setTimeout(() => setCopied(null), 2000);
+  };
+
+  const formatMessage = (content) => {
+    const codeBlockRegex = /```(\w+)?\n([\s\S]*?)```/g;
+    const parts = [];
+    let lastIndex = 0;
+    let match;
+    while ((match = codeBlockRegex.exec(content)) !== null) {
+      if (match.index > lastIndex) parts.push({ type: 'text', content: content.substring(lastIndex, match.index) });
+      parts.push({ type: 'code', language: match[1] || 'text', content: match[2].trim() });
+      lastIndex = match.index + match[0].length;
+    }
+    if (lastIndex < content.length) parts.push({ type: 'text', content: content.substring(lastIndex) });
+    return parts.length > 0 ? parts : [{ type: 'text', content }];
+  };
+
+  const quickActions = [
+    { icon: <Bug size={20} />, text: 'Debug', action: 'Debug and fix issues' },
+    { icon: <Zap size={20} />, text: 'Optimize', action: 'Optimize performance' },
+    { icon: <BookOpen size={20} />, text: 'Explain', action: 'Explain this concept' },
+    { icon: <RefreshCw size={20} />, text: 'Refactor', action: 'Refactor code' },
+  ];
+
+  const filteredSnippets = savedSnippets.filter(s => 
+    searchQuery === '' || 
+    s.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    s.language.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  return (
+    <div className="flex h-screen bg-white text-gray-900">
+      {/* Sidebar */}
+      <div className={`${sidebarOpen ? 'w-64' : 'w-0'} transition-all bg-gray-50 border-r border-gray-200 flex flex-col overflow-hidden`}>
+        <div className="p-3 border-b border-gray-200">
+          <button onClick={createNewConversation} className="w-full flex items-center gap-3 px-4 py-2.5 rounded-lg bg-white border border-gray-200 hover:bg-gray-100 shadow-sm">
+            <Plus size={18} />
+            <span className="font-medium">New chat</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto p-2">
+          {conversations.map(conv => (
+            <div key={conv.id} onClick={() => loadConversation(conv.id)} className={`group flex items-center gap-2 px-3 py-2.5 rounded-lg cursor-pointer mb-1 ${currentConversationId === conv.id ? 'bg-gray-200' : 'hover:bg-gray-100'}`}>
+              <MessageSquare size={16} />
+              <span className="flex-1 text-sm truncate">{conv.title}</span>
+              <button onClick={(e) => { e.stopPropagation(); if(confirm('Delete?')) deleteConversation(conv.id); }} className="opacity-0 group-hover:opacity-100 p-1 hover:bg-gray-300 rounded">
+                <Trash2 size={14} />
+              </button>
+            </div>
+          ))}
+        </div>
+
+        <div className="p-3 border-t border-gray-200 space-y-2">
+          {userInfo && (
+            <div className="px-3 py-2 bg-blue-50 rounded-lg text-xs">
+              <div className="font-semibold">{userInfo.username || 'User'}</div>
+              <div className="text-gray-600">{userInfo.email}</div>
+            </div>
+          )}
+          <button onClick={() => setShowFileManager(!showFileManager)} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 text-sm">
+            <Folder size={16} />
+            <span>Puter Files</span>
+          </button>
+          <button onClick={() => setActiveTab('editor')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 text-sm">
+            <Terminal size={16} />
+            <span>Editor</span>
+          </button>
+          <button onClick={() => setActiveTab('snippets')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 text-sm">
+            <BookmarkPlus size={16} />
+            <span>Snippets ({savedSnippets.length})</span>
+          </button>
+          <button onClick={() => setActiveTab('settings')} className="w-full flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-gray-100 text-sm">
+            <Settings size={16} />
+            <span>Settings</span>
+          </button>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div className="flex-1 flex flex-col">
+        {/* Top Bar */}
+        <div className="h-14 border-b border-gray-200 flex items-center justify-between px-4">
+          <div className="flex items-center gap-3">
+            <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-2 hover:bg-gray-100 rounded-lg">
+              {sidebarOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
+                <Code size={18} className="text-white" />
+              </div>
+              <span className="font-bold">Puter Pro</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <button onClick={() => setShowModelSelector(!showModelSelector)} className="flex items-center gap-2 px-4 py-2 rounded-lg hover:bg-gray-100 border border-gray-200">
+                <Cpu size={16} />
+                <span className="text-sm">{aiModel}</span>
+                <ChevronDown size={16} />
+              </button>
+              
+              {showModelSelector && (
+                <div className="absolute top-full right-0 mt-2 w-64 bg-white rounded-lg shadow-2xl border border-gray-200 p-2 z-50">
+                  {[
+                    { id: 'claude-3-5-sonnet', name: 'Claude 3.5 Sonnet' },
+                    { id: 'claude-3-opus', name: 'Claude 3 Opus' },
+                    { id: 'gpt-4', name: 'GPT-4' }
+                  ].map(model => (
+                    <button key={model.id} onClick={() => { setAiModel(model.id); setShowModelSelector(false); }} className="w-full text-left px-3 py-2 rounded-lg hover:bg-gray-100">
+                      {model.name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <button onClick={exportChat} disabled={messages.length === 0} className="p-2 hover:bg-gray-100 rounded-lg disabled:opacity-50">
+              <Download size={20} />
+            </button>
+          </div>
+        </div>
+
+        {/* Content */}
+        {activeTab === 'chat' && (
+          <div className="flex-1 flex flex-col">
+            <div className="flex-1 overflow-y-auto">
+              <div className="max-w-3xl mx-auto px-4 py-6">
+                {messages.length === 0 && (
+                  <div className="text-center py-16">
+                    <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-6">
+                      <Sparkles size={32} className="text-white" />
+                    </div>
+                    <h2 className="text-3xl font-bold mb-3">How can I help you?</h2>
+                    <p className="text-gray-600 mb-8">Powered by Puter</p>
+                    
+                    <div className="grid grid-cols-2 gap-3 max-w-2xl mx-auto">
+                      {quickActions.map((action, idx) => (
+                        <button key={idx} onClick={() => setInput(action.action)} className="flex items-center gap-3 p-4 rounded-xl border border-gray-200 hover:bg-gray-50 text-left">
+                          {action.icon}
+                          <span className="font-medium text-sm">{action.text}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {messages.map((message, idx) => (
+                  <div key={idx} className="mb-6">
+                    <div className="flex gap-4">
+                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${message.role === 'user' ? 'bg-blue-600' : 'bg-purple-600'}`}>
+                        {message.role === 'user' ? <User size={16} className="text-white" /> : <Bot size={16} className="text-white" />}
+                      </div>
+                      
+                      <div className="flex-1">
+                        <div className="font-semibold text-sm mb-2">{message.role === 'user' ? 'You' : 'Assistant'}</div>
+                        <div>
+                          {formatMessage(message.content).map((part, partIdx) => {
+                            if (part.type === 'code') {
+                              return (
+                                <div key={partIdx} className="my-4 rounded-lg overflow-hidden border border-gray-200">
+                                  <div className="flex items-center justify-between px-4 py-2 bg-gray-800">
+                                    <span className="text-xs font-semibold text-white">{part.language}</span>
+                                    <div className="flex gap-2">
+                                      <button onClick={() => { setCodeEditor(part.content); setEditorLanguage(part.language); setActiveTab('editor'); }} className="p-1 hover:bg-gray-700 rounded text-white" title="Open in editor">
+                                        <Terminal size={14} />
+                                      </button>
+                                      <button onClick={() => copyCode(part.content, `${idx}-${partIdx}`)} className="p-1 hover:bg-gray-700 rounded text-white">
+                                        {copied === `${idx}-${partIdx}` ? <Check size={14} /> : <Copy size={14} />}
+                                      </button>
+                                      <button onClick={() => saveToPuter(`code_${Date.now()}.${part.language}`, part.content)} className="p-1 hover:bg-gray-700 rounded text-white" title="Save to Puter">
+                                        <Save size={14} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                  <pre className="bg-gray-950 p-4 overflow-x-auto text-sm">
+                                    <code className="text-gray-300">{part.content}</code>
+                                  </pre>
+                                </div>
+                              );
+                            }
+                            return <p key={partIdx} className="text-gray-800 whitespace-pre-wrap">{part.content}</p>;
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+
+                {loading && (
+                  <div className="mb-6">
+                    <div className="flex gap-4">
+                      <div className="w-8 h-8 rounded-full flex items-center justify-center bg-purple-600">
+                        <Bot size={16} className="text-white" />
+                      </div>
+                      <div className="flex gap-1">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+                        <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div ref={messagesEndRef} />
+              </div>
+            </div>
+
+            {/* Input */}
+            <div className="border-t border-gray-200 p-4">
+              <div className="max-w-3xl mx-auto">
+                {uploadedFiles.length > 0 && (
+                  <div className="mb-2 flex flex-wrap gap-2">
+                    {uploadedFiles.map((file, idx) => (
+                      <div key={idx} className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 rounded-lg text-sm">
+                        <FileCode size={14} />
+                        <span>{file.name}</span>
+                        <button onClick={() => setUploadedFiles(uploadedFiles.filter((_, i) => i !== idx))}>×</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="flex gap-2">
+                  <input type="file" ref={fileInputRef} onChange={handleFileUpload} multiple className="hidden" />
+                  <button onClick={() => fileInputRef.current?.click()} className="p-3 hover:bg-gray-100 rounded-lg">
+                    <Upload size={20} />
+                  </button>
+                  <input type="text" value={input} onChange={(e) => setInput(e.target.value)} onKeyPress={(e) => e.key === 'Enter' && sendMessage()} placeholder="Message Puter Pro..." className="flex-1 px-4 py-3 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <button onClick={sendMessage} disabled={loading || !input.trim()} className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300">
+                    <Send size={20} />
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'editor' && (
+          <div className="flex-1 flex flex-col p-4">
+            <div className="max-w-6xl mx-auto w-full h-full flex flex-col">
+              <div className="flex items-center justify-between mb-4">
+                <select value={editorLanguage} onChange={(e) => setEditorLanguage(e.target.value)} className="px-4 py-2 border border-gray-200 rounded-lg">
+                  {['javascript', 'python', 'java', 'cpp', 'rust', 'go'].map(lang => <option key={lang} value={lang}>{lang}</option>)}
+                </select>
+                <div className="flex gap-2">
+                  <button onClick={saveCodeSnippet} disabled={!codeEditor.trim()} className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-300 flex items-center gap-2">
+                    <Save size={16} />Save
+                  </button>
+                  <button onClick={() => saveToPuter(`code_${Date.now()}.${editorLanguage}`, codeEditor)} disabled={!codeEditor.trim()} className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-gray-300 flex items-center gap-2">
+                    <Folder size={16} />Puter
+                  </button>
+                  <button onClick={executeCode} disabled={!codeEditor.trim() || executing} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-300 flex items-center gap-2">
+                    <Play size={16} />{executing ? 'Running...' : 'Run'}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex-1 grid grid-cols-2 gap-4">
+                <textarea value={codeEditor} onChange={(e) => setCodeEditor(e.target.value)} placeholder="// Write your code..." className="p-4 border border-gray-200 rounded-lg font-mono text-sm resize-none" />
+                <pre className="p-4 border border-gray-200 rounded-lg bg-gray-50 font-mono text-sm overflow-auto">{executionResult || 'Press "Run" to see output...'}</pre>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'snippets' && (
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="max-w-6xl mx-auto">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-bold">Saved Snippets</h2>
+                <div className="flex items-center gap-2 bg-gray-100 rounded-lg px-4 py-2">
+                  <Search size={16} />
+                  <input type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} placeholder="Search..." className="bg-transparent outline-none" />
+                </div>
+              </div>
+              {filteredSnippets.length === 0 ? (
+                <div className="text-center py-20 text-gray-500">No snippets saved yet</div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {filteredSnippets.map((snippet) => (
+                    <div key={snippet.id} className="bg-white border border-gray-200 rounded-lg p-4 hover:shadow-lg transition-all">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-lg text-xs font-bold">{snippet.language}</span>
+                        <div className="flex gap-2">
+                          <button onClick={() => loadSnippet(snippet)} className="p-1 hover:bg-gray-100 rounded" title="Load">
+                            <FolderOpen size={16} />
+                          </button>
+                          <button onClick={() => copyCode(snippet.code, snippet.id)} className="p-1 hover:bg-gray-100 rounded">
+                            {copied === snippet.id ? <Check size={16} /> : <Copy size={16} />}
+                          </button>
+                          <button onClick={() => deleteSnippet(snippet.id)} className="p-1 hover:bg-red-100 rounded text-red-600">
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      <pre className="bg-gray-50 p-3 rounded text-xs overflow-x-auto max-h-40">
+                        <code>{snippet.code.substring(0, 300)}{snippet.code.length > 300 ? '...' : ''}</code>
+                      </pre>
+                      <div className="mt-2 text-xs text-gray-500">{new Date(snippet.timestamp).toLocaleString()}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'settings' && (
+          <div className="flex-1 overflow-y-auto p-4">
+            <div className="max-w-3xl mx-auto">
+              <h2 className="text-2xl font-bold mb-6">Settings</h2>
+              
+              <div className="space-y-6">
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Cpu size={20} />AI Model
+                  </h3>
+                  <select value={aiModel} onChange={(e) => { setAiModel(e.target.value); localStorage.setItem('ai_model', e.target.value); }} className="w-full px-4 py-3 border border-gray-200 rounded-lg">
+                    <option value="claude-3-5-sonnet">Claude 3.5 Sonnet</option>
+                    <option value="claude-3-opus">Claude 3 Opus</option>
+                    <option value="gpt-4">GPT-4</option>
+                  </select>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4">Puter Integration</h3>
+                  <div className="space-y-2 text-sm">
+                    <p><strong>Status:</strong> {puterReady ? '✅ Connected' : '❌ Disconnected'}</p>
+                    {userInfo && (
+                      <>
+                        <p><strong>User:</strong> {userInfo.username}</p>
+                        <p><strong>Email:</strong> {userInfo.email}</p>
+                      </>
+                    )}
+                    <p><strong>Storage:</strong> Puter KV (Unlimited)</p>
+                    <p><strong>Files:</strong> Puter Filesystem</p>
+                  </div>
+                </div>
+
+                <div className="bg-gradient-to-br from-blue-50 to-purple-50 border border-blue-200 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4 flex items-center gap-2">
+                    <Sparkles size={20} className="text-blue-600" />
+                    Premium Features
+                  </h3>
+                  <ul className="space-y-2 text-sm">
+                    <li className="flex items-center gap-2">
+                      <Check size={16} className="text-green-600" />
+                      <span>Persistent conversations with Puter KV</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check size={16} className="text-green-600" />
+                      <span>File storage with Puter Filesystem</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check size={16} className="text-green-600" />
+                      <span>Real-time code execution (50+ languages)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check size={16} className="text-green-600" />
+                      <span>Multiple AI models (Claude, GPT-4)</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check size={16} className="text-green-600" />
+                      <span>Code snippet library</span>
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check size={16} className="text-green-600" />
+                      <span>File upload and analysis</span>
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="bg-white border border-gray-200 rounded-lg p-6">
+                  <h3 className="text-lg font-semibold mb-4">About</h3>
+                  <div className="space-y-2 text-sm text-gray-600">
+                    <p><strong>Version:</strong> 3.0.0 Complete</p>
+                    <p><strong>Platform:</strong> Puter.com</p>
+                    <p><strong>Execution:</strong> Piston API</p>
+                    <p><strong>Built with:</strong> React + Puter SDK</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* File Manager Modal */}
+      {showFileManager && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-3/4 flex flex-col">
+            <div className="flex items-center justify-between p-4 border-b border-gray-200">
+              <h3 className="text-lg font-bold flex items-center gap-2">
+                <Folder size={20} />
+                Puter Files - {currentPath}
+              </h3>
+              <button onClick={() => setShowFileManager(false)} className="p-2 hover:bg-gray-100 rounded-lg">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4">
+              {puterFiles.length === 0 ? (
+                <div className="text-center py-20 text-gray-500">
+                  <Folder size={64} className="mx-auto mb-4 opacity-50" />
+                  <p>No files in this directory</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {puterFiles.map((file, idx) => (
+                    <div key={idx} className="border border-gray-200 rounded-lg p-4 hover:bg-gray-50 cursor-pointer">
+                      <div className="flex flex-col items-center gap-2">
+                        {file.is_dir ? <Folder size={48} className="text-blue-600" /> : <File size={48} className="text-gray-600" />}
+                        <span className="text-sm text-center truncate w-full">{file.name}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex gap-2">
+              <button onClick={loadPuterFiles} className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2">
+                <RefreshCw size={16} />Refresh
+              </button>
+              <button onClick={() => setShowFileManager(false)} className="px-4 py-2 bg-gray-200 rounded-lg hover:bg-gray-300">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default PuterCodingAssistant;
