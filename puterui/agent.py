@@ -13,6 +13,7 @@ from puterui.persona import Persona
 from puterui.skills import SkillRegistry
 from puterui.terminal import TerminalManager
 from puterui.tools import TOOL_DEFINITIONS, execute_tool
+from puterui.vision import build_image_message, extract_image_refs
 
 BASE_SYSTEM_PROMPT = """\
 You are a coding assistant running in the user's terminal.
@@ -142,9 +143,40 @@ class Agent:
     async def send(self, user_message: str) -> str:
         """Send a user message and run the agent loop.
 
+        Automatically detects image references in the message
+        (e.g. [image: path.png] or bare paths like ./screenshot.png)
+        and sends them as multimodal messages for vision-capable models.
+
         Returns the final text response.
         """
+        cleaned, image_paths = extract_image_refs(user_message)
+        if image_paths:
+            return await self.send_with_images(cleaned, image_paths)
+
         self.messages.append({"role": "user", "content": user_message})
+        return await self._run_agent_loop()
+
+    async def send_with_images(
+        self, text: str, image_paths: list[str]
+    ) -> str:
+        """Send a message with attached images for vision models.
+
+        Images are base64-encoded and sent in the Ollama `images` field.
+        """
+        message = build_image_message(text, image_paths, self.project_dir)
+        n_images = len(message.get("images", []))
+        if n_images > 0:
+            ui.print_info(f"Attached {n_images} image(s) to message.")
+        else:
+            ui.print_warning(
+                "No valid images found at the given paths. "
+                "Sending as text-only."
+            )
+        self.messages.append(message)
+        return await self._run_agent_loop()
+
+    async def _run_agent_loop(self) -> str:
+        """Execute the agent loop (LLM call + tool execution cycle)."""
 
         for _iteration in range(self.config.max_iterations):
             try:

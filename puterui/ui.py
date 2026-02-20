@@ -112,11 +112,17 @@ def print_help() -> None:
 - `/browser stop` - Close the browser
 - `/browser status` - Check browser status
 
+**Vision / Multimodal:**
+- `/image <path> [question]` - Send an image with an optional question
+- Inline: just include image paths in your message (e.g. `analyze ./screenshot.png`)
+- Tag syntax: `[image: path/to/file.png] describe this`
+
 **Tips:**
 - Just type naturally to ask the assistant for help
 - The assistant can read, write, edit files, and run commands
 - It can control a persistent terminal (preserves cd, env vars)
 - It can control your browser (navigate, click, type, screenshot)
+- Vision models (MiniCPM-o, llava, moondream) can analyze images
 - Multi-line input: end a line with `\\` to continue
 """
     console.print(Markdown(help_text))

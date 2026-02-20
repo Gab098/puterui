@@ -207,6 +207,9 @@ async def _handle_command(
         )
         ui.console.print(result)
 
+    elif command == "/image":
+        await _handle_image_command(arg, agent)
+
     elif command == "/persona":
         await _handle_persona_command(arg, agent)
 
@@ -225,6 +228,33 @@ async def _handle_command(
         )
 
     return None
+
+
+async def _handle_image_command(arg: str, agent: Agent) -> None:
+    """Handle /image command to send images to vision models."""
+    if not arg:
+        ui.print_info(
+            "Usage: /image <path> [question]\n"
+            "  Example: /image ./screenshot.png What's in this image?\n"
+            "  You can also include images inline: analyze ./photo.jpg\n"
+            "  Or use tags: [image: path.png] describe this"
+        )
+        return
+
+    parts = arg.split(maxsplit=1)
+    image_path = parts[0]
+    question = parts[1] if len(parts) > 1 else "Describe this image."
+
+    from puterui.vision import is_image_path
+
+    if not is_image_path(image_path):
+        ui.print_error(
+            f"'{image_path}' doesn't look like an image file. "
+            "Supported: png, jpg, jpeg, gif, bmp, webp, tiff"
+        )
+        return
+
+    await agent.send_with_images(question, [image_path])
 
 
 async def _handle_persona_command(arg: str, agent: Agent) -> None:
