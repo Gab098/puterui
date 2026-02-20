@@ -3,8 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import ipaddress
 import os
 import re
+import socket
+import urllib.error
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Any
 
@@ -134,6 +139,58 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
                     "file_glob": {
                         "type": "string",
                         "description": "Optional glob to filter files (e.g. '*.py').",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_url",
+            "description": (
+                "Fetch a URL over HTTP(S) and return response metadata and body preview. "
+                "Useful for recon, API inspection, and debugging web flows."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL to fetch.",
+                    },
+                    "method": {
+                        "type": "string",
+                        "description": "HTTP method (default GET).",
+                    },
+                    "data": {
+                        "type": "string",
+                        "description": "Optional request body to send.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_web",
+            "description": (
+                "Search the web for a query and return top result links. "
+                "Useful for finding alternative tools, docs, and exploitation references."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["query"],
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query text.",
+                    },
+                    "max_results": {
+                        "type": "integer",
+                        "description": "Maximum number of results to return (default 5).",
                     },
                 },
             },
@@ -298,6 +355,53 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
 class ToolError(Exception):
     """Raised when a tool execution fails."""
 
+
+
+
+def _validate_network_url(url: str) -> str | None:
+    """Return an error message if URL target is unsafe, else None."""
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        return "Error: invalid URL."
+
+    if parsed.scheme not in {"http", "https"}:
+        return "Error: only http:// and https:// URLs are allowed."
+
+    host = parsed.hostname
+    if not host:
+        return "Error: URL must include a hostname."
+
+    if host.lower() in {"localhost"}:
+        return "Error: localhost targets are blocked for safety."
+
+    def _is_blocked_ip(ip_str: str) -> bool:
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError:
+            return False
+        return (
+            ip_obj.is_loopback
+            or ip_obj.is_private
+            or ip_obj.is_link_local
+            or ip_obj.is_multicast
+            or ip_obj.is_reserved
+            or ip_obj.is_unspecified
+        )
+
+    if _is_blocked_ip(host):
+        return "Error: private or local network targets are blocked for safety."
+
+    try:
+        _, _, ips = socket.gethostbyname_ex(host)
+    except socket.gaierror:
+        return None
+
+    for ip_str in ips:
+        if _is_blocked_ip(ip_str):
+            return "Error: resolved target points to a blocked local/private address."
+
+    return None
 
 def _resolve_path(path_str: str, project_dir: Path) -> Path:
     """Resolve a path relative to the project directory."""
@@ -536,6 +640,85 @@ async def tool_run_command(
     return f"{result}\n{exit_info}"
 
 
+async def tool_fetch_url(args: dict[str, Any]) -> str:
+    """Fetch a URL using urllib and return response details."""
+    url = args.get("url", "").strip()
+    if not url:
+        return "Error: no URL provided."
+
+    if safety_error := _validate_network_url(url):
+        return safety_error
+
+    method = str(args.get("method", "GET")).upper()
+    data_str = args.get("data")
+    data = data_str.encode("utf-8") if isinstance(data_str, str) else None
+
+    request = urllib.request.Request(url=url, method=method, data=data)
+    request.add_header("User-Agent", "puterui-fetch-url/1.0")
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            raw_body = response.read(12000)
+            body = raw_body.decode("utf-8", errors="replace")
+            headers = "\n".join(f"{k}: {v}" for k, v in response.headers.items())
+            return (
+                f"URL: {url}\n"
+                f"Status: {response.status}\n"
+                f"Final URL: {response.geturl()}\n"
+                f"Headers:\n{headers}\n\n"
+                f"Body preview (max 12KB):\n{body}"
+            )
+    except urllib.error.HTTPError as exc:
+        body = exc.read(6000).decode("utf-8", errors="replace")
+        return f"HTTP error {exc.code}: {exc.reason}\nURL: {url}\nBody:\n{body}"
+    except urllib.error.URLError as exc:
+        return f"Network error: {exc.reason}"
+    except Exception as exc:
+        return f"Error fetching URL: {exc}"
+
+
+async def tool_search_web(args: dict[str, Any]) -> str:
+    """Search the web via DuckDuckGo HTML and return top links."""
+    query = args.get("query", "").strip()
+    if not query:
+        return "Error: no query provided."
+
+    try:
+        max_results = int(args.get("max_results", 5))
+    except (TypeError, ValueError):
+        return "Error: max_results must be an integer."
+    max_results = min(max(max_results, 1), 10)
+
+    encoded_query = urllib.parse.quote_plus(query)
+    url = f"https://duckduckgo.com/html/?q={encoded_query}"
+    request = urllib.request.Request(url=url, method="GET")
+    request.add_header("User-Agent", "puterui-search-web/1.0")
+
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            html = response.read(80000).decode("utf-8", errors="replace")
+
+        matches = re.findall(
+            r'<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>(.*?)</a>',
+            html,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
+        if not matches:
+            return f"No results found for query: {query}"
+
+        lines = [f"Search query: {query}"]
+        for idx, (href, title_html) in enumerate(matches[:max_results], start=1):
+            title = re.sub(r"<[^>]+>", "", title_html).strip()
+            lines.append(f"{idx}. {title}\n   {href}")
+
+        lines.append("\nTip: use fetch_url on a result link for deeper inspection.")
+        return "\n".join(lines)
+    except urllib.error.URLError as exc:
+        return f"Network error: {exc.reason}"
+    except Exception as exc:
+        return f"Error searching web: {exc}"
+
+
 # ---------------------------------------------------------------------------
 # Terminal tool handlers
 # ---------------------------------------------------------------------------
@@ -690,6 +873,11 @@ FILE_TOOL_HANDLERS = {
     "run_command": tool_run_command,
 }
 
+NETWORK_TOOL_HANDLERS = {
+    "fetch_url": tool_fetch_url,
+    "search_web": tool_search_web,
+}
+
 TERMINAL_TOOL_HANDLERS = {
     "terminal_exec": tool_terminal_exec,
 }
@@ -706,6 +894,7 @@ BROWSER_TOOL_HANDLERS = {
 # Combined for backwards compat
 TOOL_HANDLERS = {
     **FILE_TOOL_HANDLERS,
+    **NETWORK_TOOL_HANDLERS,
     **TERMINAL_TOOL_HANDLERS,
     **BROWSER_TOOL_HANDLERS,
 }
@@ -724,6 +913,9 @@ async def execute_tool(
         if name == "run_command":
             return await tool_run_command(args, project_dir, allowed_commands or [])
         return await FILE_TOOL_HANDLERS[name](args, project_dir)
+
+    if name in NETWORK_TOOL_HANDLERS:
+        return await NETWORK_TOOL_HANDLERS[name](args)
 
     if name in TERMINAL_TOOL_HANDLERS:
         return await tool_terminal_exec(args, project_dir, terminal_manager)

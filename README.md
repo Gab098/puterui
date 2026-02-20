@@ -5,7 +5,7 @@ A lightweight terminal-based AI coding assistant powered by [Ollama](https://oll
 ## Features
 
 - **Local-first**: Runs entirely on your machine via Ollama. No API keys, no cloud costs.
-- **Tool-use agent loop**: The assistant can read, write, edit files, search code, and run commands.
+- **Tool-use agent loop**: The assistant can read/write/edit files, search code, fetch URLs, search the web, and run commands.
 - **Persona / Soul system**: Give the assistant a configurable identity, personality, values, and rules (inspired by OpenClaw).
 - **Skills system**: Load specialized instruction modules for code review, refactoring, git workflows, and more.
 - **Terminal control**: Persistent shell sessions with working directory tracking -- like having a real terminal.
@@ -134,6 +134,8 @@ Skills are specialized instruction modules that enhance the assistant's capabili
 | Code Review | Systematic code review (bugs, security, performance, style) |
 | Refactor | Safe incremental refactoring with behavior preservation |
 | Git Workflow | Git best practices, conventional commits, branching |
+| Adaptive Operator | Structured plan→execute→verify workflow for stronger results on small local models |
+| Toolsmith | Build minimal new tools/skills when blocked and validate before use |
 
 ### Using Skills
 

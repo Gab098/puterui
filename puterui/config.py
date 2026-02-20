@@ -32,9 +32,11 @@ class Config:
     max_iterations: int = DEFAULT_MAX_ITERATIONS
     system_prompt: str = ""
     allowed_commands: list[str] = field(default_factory=lambda: [
-        "ls", "cat", "head", "tail", "find", "grep", "wc",
-        "git", "python", "pip", "npm", "node", "cargo", "go",
-        "make", "echo", "pwd", "whoami", "date", "uname",
+        "ls", "cat", "head", "tail", "find", "grep", "rg", "wc",
+        "sed", "awk", "sort", "uniq", "cut", "xargs", "jq",
+        "git", "python", "python3", "pip", "pip3", "npm", "node",
+        "cargo", "go", "make", "curl", "wget", "openssl", "xxd",
+        "nc", "nmap", "echo", "pwd", "whoami", "date", "uname",
     ])
 
     @classmethod

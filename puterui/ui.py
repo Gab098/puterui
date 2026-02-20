@@ -5,6 +5,7 @@ from __future__ import annotations
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
+from rich.table import Table
 from rich.text import Text
 from rich.theme import Theme
 
@@ -19,6 +20,28 @@ THEME = Theme({
 
 console = Console(theme=THEME)
 
+
+
+
+def print_quick_status(
+    model: str,
+    persona_name: str,
+    persona_role: str,
+    active_skills: list[str],
+    project_dir: str,
+) -> None:
+    """Print a compact status table for the current interactive session."""
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_column(style="dim", width=14)
+    table.add_column()
+
+    skills = ", ".join(active_skills) if active_skills else "(none)"
+    table.add_row("Model", f"[bold]{model}[/bold]")
+    table.add_row("Persona", f"[bold]{persona_name}[/bold] ({persona_role})")
+    table.add_row("Skills", skills)
+    table.add_row("Project", f"[dim]{project_dir}[/dim]")
+
+    console.print(Panel(table, title="[bold cyan]session[/bold cyan]", border_style="cyan"))
 
 def print_banner() -> None:
     """Print the startup banner."""
@@ -92,6 +115,8 @@ def print_help() -> None:
 - `/config` - Show current configuration
 - `/compact` - Summarize conversation to save context
 - `/files` - List files in the project directory
+- `/status` - Show current session status (model, persona, skills, browser, terminals)
+- `/tools` - List available agent tools
 
 **Persona:**
 - `/persona` - Show current persona identity
@@ -119,7 +144,7 @@ def print_help() -> None:
 
 **Tips:**
 - Just type naturally to ask the assistant for help
-- The assistant can read, write, edit files, and run commands
+- The assistant can read/write/edit files, run commands, fetch URLs, and search web links
 - It can control a persistent terminal (preserves cd, env vars)
 - It can control your browser (navigate, click, type, screenshot)
 - Vision models (MiniCPM-o, llava, moondream) can analyze images
