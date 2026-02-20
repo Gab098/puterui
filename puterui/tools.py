@@ -159,6 +159,137 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             },
         },
     },
+    {
+        "type": "function",
+        "function": {
+            "name": "terminal_exec",
+            "description": (
+                "Execute a command in a persistent terminal session. "
+                "The session preserves working directory between commands. "
+                "No command restrictions -- full terminal access."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": ["command"],
+                "properties": {
+                    "command": {
+                        "type": "string",
+                        "description": "The shell command to execute.",
+                    },
+                    "session": {
+                        "type": "string",
+                        "description": (
+                            "Terminal session name (default: 'default'). "
+                            "Use different names for parallel workflows."
+                        ),
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_navigate",
+            "description": "Open a URL in the controlled browser.",
+            "parameters": {
+                "type": "object",
+                "required": ["url"],
+                "properties": {
+                    "url": {
+                        "type": "string",
+                        "description": "The URL to navigate to.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_get_text",
+            "description": (
+                "Get the visible text content of the current browser page."
+            ),
+            "parameters": {
+                "type": "object",
+                "required": [],
+                "properties": {},
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_click",
+            "description": "Click an element on the page by CSS selector.",
+            "parameters": {
+                "type": "object",
+                "required": ["selector"],
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the element to click.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_type",
+            "description": "Type text into an input element on the page.",
+            "parameters": {
+                "type": "object",
+                "required": ["selector", "text"],
+                "properties": {
+                    "selector": {
+                        "type": "string",
+                        "description": "CSS selector for the input element.",
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "Text to type into the element.",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_screenshot",
+            "description": "Take a screenshot of the current browser page.",
+            "parameters": {
+                "type": "object",
+                "required": [],
+                "properties": {
+                    "path": {
+                        "type": "string",
+                        "description": "Path to save the screenshot (optional).",
+                    },
+                },
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "browser_js",
+            "description": "Execute JavaScript in the browser and return result.",
+            "parameters": {
+                "type": "object",
+                "required": ["script"],
+                "properties": {
+                    "script": {
+                        "type": "string",
+                        "description": "JavaScript code to execute.",
+                    },
+                },
+            },
+        },
+    },
 ]
 
 
@@ -405,10 +536,151 @@ async def tool_run_command(
 
 
 # ---------------------------------------------------------------------------
+# Terminal tool handlers
+# ---------------------------------------------------------------------------
+
+async def tool_terminal_exec(
+    args: dict[str, Any],
+    project_dir: Path,
+    terminal_manager: Any = None,
+) -> str:
+    """Execute a command in a persistent terminal session."""
+    if terminal_manager is None:
+        return "Error: terminal manager not available."
+
+    session_name = args.get("session", "default")
+    command = args.get("command", "")
+    if not command:
+        return "Error: no command provided."
+
+    session = terminal_manager.get_session(session_name)
+    if session is None:
+        session = terminal_manager.create_session(name=session_name)
+
+    result = await session.execute(command)
+
+    output_parts = []
+    if result.stdout:
+        stdout = result.stdout
+        if len(stdout) > 10000:
+            stdout = stdout[:10000] + "\n... (truncated)"
+        output_parts.append(stdout)
+    if result.stderr:
+        stderr = result.stderr
+        if len(stderr) > 5000:
+            stderr = stderr[:5000] + "\n... (truncated)"
+        output_parts.append(f"[stderr]\n{stderr}")
+
+    output = "\n".join(output_parts) if output_parts else "(no output)"
+    return f"{output}\n[exit code: {result.exit_code}] [cwd: {result.cwd}]"
+
+
+# ---------------------------------------------------------------------------
+# Browser tool handlers
+# ---------------------------------------------------------------------------
+
+async def tool_browser_navigate(
+    args: dict[str, Any], browser: Any = None
+) -> str:
+    """Navigate to a URL in the browser."""
+    if browser is None:
+        return "Error: browser not available. Use /browser start first."
+
+    url = args.get("url", "")
+    if not url:
+        return "Error: no URL provided."
+
+    result = await browser.navigate(url)
+    if result.success:
+        return result.data
+    return f"Error: {result.error}"
+
+
+async def tool_browser_get_text(
+    args: dict[str, Any], browser: Any = None
+) -> str:
+    """Get page text from the browser."""
+    if browser is None:
+        return "Error: browser not available."
+
+    result = await browser.get_text()
+    if result.success:
+        header = f"Page: {result.title} ({result.url})\n---\n"
+        return header + result.data
+    return f"Error: {result.error}"
+
+
+async def tool_browser_click(
+    args: dict[str, Any], browser: Any = None
+) -> str:
+    """Click an element in the browser."""
+    if browser is None:
+        return "Error: browser not available."
+
+    selector = args.get("selector", "")
+    if not selector:
+        return "Error: no selector provided."
+
+    result = await browser.click(selector)
+    if result.success:
+        return result.data
+    return f"Error: {result.error}"
+
+
+async def tool_browser_type(
+    args: dict[str, Any], browser: Any = None
+) -> str:
+    """Type text into a browser element."""
+    if browser is None:
+        return "Error: browser not available."
+
+    selector = args.get("selector", "")
+    text = args.get("text", "")
+    if not selector or not text:
+        return "Error: selector and text are required."
+
+    result = await browser.type_text(selector, text)
+    if result.success:
+        return result.data
+    return f"Error: {result.error}"
+
+
+async def tool_browser_screenshot(
+    args: dict[str, Any], browser: Any = None
+) -> str:
+    """Take a browser screenshot."""
+    if browser is None:
+        return "Error: browser not available."
+
+    path = args.get("path")
+    result = await browser.screenshot(path)
+    if result.success:
+        return result.data
+    return f"Error: {result.error}"
+
+
+async def tool_browser_js(
+    args: dict[str, Any], browser: Any = None
+) -> str:
+    """Execute JavaScript in the browser."""
+    if browser is None:
+        return "Error: browser not available."
+
+    script = args.get("script", "")
+    if not script:
+        return "Error: no script provided."
+
+    result = await browser.execute_js(script)
+    if result.success:
+        return result.data
+    return f"Error: {result.error}"
+
+
+# ---------------------------------------------------------------------------
 # Tool dispatcher
 # ---------------------------------------------------------------------------
 
-TOOL_HANDLERS = {
+FILE_TOOL_HANDLERS = {
     "read_file": tool_read_file,
     "write_file": tool_write_file,
     "edit_file": tool_edit_file,
@@ -417,18 +689,45 @@ TOOL_HANDLERS = {
     "run_command": tool_run_command,
 }
 
+TERMINAL_TOOL_HANDLERS = {
+    "terminal_exec": tool_terminal_exec,
+}
+
+BROWSER_TOOL_HANDLERS = {
+    "browser_navigate": tool_browser_navigate,
+    "browser_get_text": tool_browser_get_text,
+    "browser_click": tool_browser_click,
+    "browser_type": tool_browser_type,
+    "browser_screenshot": tool_browser_screenshot,
+    "browser_js": tool_browser_js,
+}
+
+# Combined for backwards compat
+TOOL_HANDLERS = {
+    **FILE_TOOL_HANDLERS,
+    **TERMINAL_TOOL_HANDLERS,
+    **BROWSER_TOOL_HANDLERS,
+}
+
 
 async def execute_tool(
     name: str,
     args: dict[str, Any],
     project_dir: Path,
     allowed_commands: list[str] | None = None,
+    terminal_manager: Any = None,
+    browser: Any = None,
 ) -> str:
     """Dispatch and execute a tool call."""
-    handler = TOOL_HANDLERS.get(name)
-    if handler is None:
-        return f"Error: unknown tool '{name}'."
+    if name in FILE_TOOL_HANDLERS:
+        if name == "run_command":
+            return await tool_run_command(args, project_dir, allowed_commands or [])
+        return await FILE_TOOL_HANDLERS[name](args, project_dir)
 
-    if name == "run_command":
-        return await handler(args, project_dir, allowed_commands or [])
-    return await handler(args, project_dir)
+    if name in TERMINAL_TOOL_HANDLERS:
+        return await tool_terminal_exec(args, project_dir, terminal_manager)
+
+    if name in BROWSER_TOOL_HANDLERS:
+        return await BROWSER_TOOL_HANDLERS[name](args, browser)
+
+    return f"Error: unknown tool '{name}'."

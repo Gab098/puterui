@@ -93,10 +93,30 @@ def print_help() -> None:
 - `/compact` - Summarize conversation to save context
 - `/files` - List files in the project directory
 
+**Persona:**
+- `/persona` - Show current persona identity
+- `/persona details` - Show full persona prompt
+
+**Skills:**
+- `/skill list` - List available skills
+- `/skill activate <name>` - Activate a skill
+- `/skill deactivate <name>` - Deactivate a skill
+- `/skill info <name>` - Show skill details
+
+**Terminal:**
+- `/terminal list` - List active terminal sessions
+- `/terminal close <name>` - Close a terminal session
+
+**Browser:**
+- `/browser start [playwright|selenium]` - Start browser control
+- `/browser stop` - Close the browser
+- `/browser status` - Check browser status
+
 **Tips:**
 - Just type naturally to ask the assistant for help
-- The assistant can read, write, and edit files in your project
-- It can also run shell commands (with safety restrictions)
+- The assistant can read, write, edit files, and run commands
+- It can control a persistent terminal (preserves cd, env vars)
+- It can control your browser (navigate, click, type, screenshot)
 - Multi-line input: end a line with `\\` to continue
 """
     console.print(Markdown(help_text))

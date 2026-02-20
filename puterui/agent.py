@@ -3,48 +3,92 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Any, Optional
 
 from puterui import ui
+from puterui.browser import BrowserController
 from puterui.client import OllamaClient, OllamaError
 from puterui.config import Config
+from puterui.persona import Persona
+from puterui.skills import SkillRegistry
+from puterui.terminal import TerminalManager
 from puterui.tools import TOOL_DEFINITIONS, execute_tool
 
-DEFAULT_SYSTEM_PROMPT = """\
-You are PuterUI, a helpful AI coding assistant running in the user's terminal.
+BASE_SYSTEM_PROMPT = """\
+You are a coding assistant running in the user's terminal.
 You have access to tools that let you read files, write files, edit files, \
-list directories, search code, and run shell commands in the user's project.
+list directories, search code, run shell commands, control a persistent \
+terminal session, and control a web browser on the user's machine.
 
 Guidelines:
 - Be concise and direct. Avoid unnecessary preamble.
 - When the user asks you to make changes, use the available tools to do so.
 - Always read relevant files before editing them.
-- Explain what you're doing briefly before and after making changes.
+- Explain what you are doing briefly before and after making changes.
 - If a task is ambiguous, ask clarifying questions.
 - For code changes, follow the project's existing style and conventions.
-- When running commands, prefer safe read-only commands unless the user asks \
-for modifications.
+- Use terminal_exec for commands that need persistent state (cd, env vars).
+- Use browser tools when asked to interact with web pages.
 """
 
 
 class Agent:
     """Manages conversation state and the tool-use loop."""
 
-    def __init__(self, config: Config, project_dir: Path) -> None:
+    def __init__(
+        self,
+        config: Config,
+        project_dir: Path,
+        persona: Optional[Persona] = None,
+        skills: Optional[SkillRegistry] = None,
+    ) -> None:
         self.config = config
         self.project_dir = project_dir
         self.client = OllamaClient(config)
+        self.persona = persona or Persona()
+        self.skills = skills or SkillRegistry()
+        self.terminal = TerminalManager(str(project_dir))
+        self.browser = BrowserController()
         self.messages: list[dict[str, Any]] = []
 
-        system_prompt = config.system_prompt or DEFAULT_SYSTEM_PROMPT
-        project_context = f"\nProject directory: {project_dir}\n"
-        self.messages.append({
-            "role": "system",
-            "content": system_prompt + project_context,
-        })
+        self._build_system_prompt()
+
+    def _build_system_prompt(self) -> None:
+        """Construct the system prompt from persona, skills, and config."""
+        parts = []
+
+        # Persona identity
+        parts.append(self.persona.to_system_prompt())
+        parts.append("")
+
+        # Base capabilities
+        if self.config.system_prompt:
+            parts.append(self.config.system_prompt)
+        else:
+            parts.append(BASE_SYSTEM_PROMPT)
+
+        # Active skills
+        skills_prompt = self.skills.get_active_prompt()
+        if skills_prompt:
+            parts.append(skills_prompt)
+
+        # Project context
+        parts.append(f"\nProject directory: {self.project_dir}")
+
+        self.messages = [
+            {"role": "system", "content": "\n".join(parts)},
+        ]
+
+    def rebuild_system_prompt(self) -> None:
+        """Rebuild system prompt (e.g. after activating a skill)."""
+        old_messages = self.messages[1:] if len(self.messages) > 1 else []
+        self._build_system_prompt()
+        self.messages.extend(old_messages)
 
     async def close(self) -> None:
         await self.client.close()
+        await self.terminal.close_all()
+        await self.browser.close()
 
     def clear_history(self) -> None:
         """Clear conversation history, keeping the system prompt."""
@@ -60,13 +104,19 @@ class Agent:
             return
 
         summary_request = [
-            {"role": "system", "content": "Summarize the following conversation concisely."},
+            {
+                "role": "system",
+                "content": "Summarize the following conversation concisely.",
+            },
             {
                 "role": "user",
-                "content": "Summarize this conversation into key points and decisions:\n\n"
-                + "\n".join(
-                    f"[{m['role']}]: {m.get('content', '(tool call)')}"
-                    for m in self.messages[1:]
+                "content": (
+                    "Summarize this conversation into key points "
+                    "and decisions:\n\n"
+                    + "\n".join(
+                        f"[{m['role']}]: {m.get('content', '(tool call)')}"
+                        for m in self.messages[1:]
+                    )
                 ),
             },
         ]
@@ -78,7 +128,10 @@ class Agent:
                 system = self.messages[0]
                 self.messages = [
                     system,
-                    {"role": "assistant", "content": f"[Conversation summary]: {summary}"},
+                    {
+                        "role": "assistant",
+                        "content": f"[Conversation summary]: {summary}",
+                    },
                 ]
                 ui.print_success("Conversation compacted.")
             else:
@@ -87,10 +140,13 @@ class Agent:
             ui.print_error(f"Failed to compact: {exc}")
 
     async def send(self, user_message: str) -> str:
-        """Send a user message and run the agent loop. Returns the final text response."""
+        """Send a user message and run the agent loop.
+
+        Returns the final text response.
+        """
         self.messages.append({"role": "user", "content": user_message})
 
-        for iteration in range(self.config.max_iterations):
+        for _iteration in range(self.config.max_iterations):
             try:
                 response = await self.client.chat(
                     messages=self.messages,
@@ -119,12 +175,14 @@ class Agent:
                     args_summary = _summarize_args(tool_args)
                     ui.print_tool_call(tool_name, args_summary)
 
-                    # Execute
+                    # Execute with all contexts
                     result = await execute_tool(
                         name=tool_name,
                         args=tool_args,
                         project_dir=self.project_dir,
                         allowed_commands=self.config.allowed_commands,
+                        terminal_manager=self.terminal,
+                        browser=self.browser,
                     )
 
                     ui.print_tool_result(result)
@@ -162,5 +220,5 @@ def _summarize_args(args: dict[str, Any], max_len: int = 80) -> str:
         parts.append(f"{k}={val_str!r}")
     summary = ", ".join(parts)
     if len(summary) > max_len:
-        summary = summary[:max_len - 3] + "..."
+        summary = summary[: max_len - 3] + "..."
     return summary

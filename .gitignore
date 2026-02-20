@@ -10,6 +10,7 @@ build/
 venv/
 .env
 puterui.toml
+persona.toml
 .ruff_cache/
 .pytest_cache/
 .mypy_cache/
