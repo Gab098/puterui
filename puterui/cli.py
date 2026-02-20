@@ -97,7 +97,7 @@ async def run_interactive(agent: Agent, config: Config) -> None:
     while True:
         try:
             prompt_str = "... " if input_buffer else "you> "
-            line = await asyncio.get_event_loop().run_in_executor(
+            line = await asyncio.get_running_loop().run_in_executor(
                 None, lambda: input(prompt_str)
             )
         except (EOFError, KeyboardInterrupt):

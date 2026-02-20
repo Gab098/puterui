@@ -93,6 +93,10 @@ class SkillRegistry:
         skills_dir = Path.home() / ".config" / "puterui" / SKILLS_DIR_NAME
         return self.load_from_directory(skills_dir)
 
+    def register(self, skill: Skill) -> None:
+        """Register a skill in the available pool."""
+        self._available[skill.name] = skill
+
     def activate(self, name: str) -> bool:
         """Activate a skill by name."""
         if name in self._available:

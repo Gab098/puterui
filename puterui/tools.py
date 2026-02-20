@@ -213,7 +213,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             ),
             "parameters": {
                 "type": "object",
-                "required": [],
                 "properties": {},
             },
         },
@@ -263,7 +262,6 @@ TOOL_DEFINITIONS: list[dict[str, Any]] = [
             "description": "Take a screenshot of the current browser page.",
             "parameters": {
                 "type": "object",
-                "required": [],
                 "properties": {
                     "path": {
                         "type": "string",
@@ -385,6 +383,9 @@ async def tool_edit_file(
 
     old = args["old_string"]
     new = args["new_string"]
+
+    if not old:
+        return "Error: old_string cannot be empty."
 
     count = content.count(old)
     if count == 0:

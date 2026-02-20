@@ -118,7 +118,7 @@ def load_openclaw_skills(directory: Path, registry: SkillRegistry) -> int:
             pass
 
         if skill:
-            registry._available[skill.name] = skill
+            registry.register(skill)
             count += 1
 
     return count

@@ -90,6 +90,16 @@ async def test_edit_file(project):
 
 
 @pytest.mark.asyncio
+async def test_edit_file_empty_old_string(project):
+    result = await tool_edit_file(
+        {"path": "hello.py", "old_string": "", "new_string": "x"},
+        project,
+    )
+    assert "Error" in result
+    assert "empty" in result
+
+
+@pytest.mark.asyncio
 async def test_edit_file_not_found_string(project):
     result = await tool_edit_file(
         {

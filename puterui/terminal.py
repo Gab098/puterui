@@ -33,21 +33,10 @@ class TerminalSession:
     cwd: str
     env: dict[str, str] = field(default_factory=dict)
     history: list[CommandResult] = field(default_factory=list)
-    _process: Optional[asyncio.subprocess.Process] = field(
+    _active_proc: Optional[asyncio.subprocess.Process] = field(
         default=None, repr=False
     )
     _max_history: int = 50
-
-    async def start(self) -> None:
-        """Start the shell process."""
-        self._process = await asyncio.create_subprocess_exec(
-            "/bin/bash", "--norc", "--noprofile", "-i",
-            stdin=asyncio.subprocess.PIPE,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            cwd=self.cwd,
-            env={**os.environ, **self.env},
-        )
 
     async def execute(self, command: str, timeout: float = 30.0) -> CommandResult:
         """Execute a command in this session.
@@ -57,8 +46,10 @@ class TerminalSession:
         """
         # Wrap command to capture the cwd after execution
         sentinel = f"__PUTERUI_END_{id(self)}__"
+        # Quote cwd to handle paths with spaces
+        quoted_cwd = self.cwd.replace("'", "'\\''")
         wrapped = (
-            f"cd {self.cwd} 2>/dev/null; "
+            f"cd '{quoted_cwd}' 2>/dev/null; "
             f"{command}; "
             f"__exit_code=$?; "
             f'echo "{sentinel}"; '
@@ -74,10 +65,20 @@ class TerminalSession:
                 cwd=self.cwd,
                 env={**os.environ, **self.env},
             )
+            self._active_proc = proc
             stdout_bytes, stderr_bytes = await asyncio.wait_for(
                 proc.communicate(), timeout=timeout
             )
+            self._active_proc = None
         except asyncio.TimeoutError:
+            # Kill the timed-out process
+            if proc.returncode is None:
+                try:
+                    proc.kill()
+                    await proc.wait()
+                except Exception:
+                    pass
+            self._active_proc = None
             return CommandResult(
                 stdout="",
                 stderr="Error: command timed out",
@@ -124,16 +125,17 @@ class TerminalSession:
         return result
 
     async def close(self) -> None:
-        """Terminate the session."""
-        if self._process and self._process.returncode is None:
+        """Terminate the session and kill any active process."""
+        if self._active_proc and self._active_proc.returncode is None:
             try:
-                self._process.terminate()
-                await asyncio.wait_for(self._process.wait(), timeout=5.0)
+                self._active_proc.terminate()
+                await asyncio.wait_for(self._active_proc.wait(), timeout=5.0)
             except Exception:
                 try:
-                    self._process.kill()
+                    self._active_proc.kill()
                 except Exception:
                     pass
+            self._active_proc = None
 
 
 class TerminalManager:
