@@ -92,10 +92,28 @@ def test_extract_image_refs_tag():
 
 
 def test_extract_image_refs_bare_path():
-    """Should detect bare image paths."""
+    """Should detect bare image paths with prefix."""
     text = "analyze ./screenshot.png please"
     cleaned, paths = extract_image_refs(text)
     assert "./screenshot.png" in paths
+    # Path should be removed from cleaned text
+    assert "./screenshot.png" not in cleaned
+    assert "analyze" in cleaned
+
+
+def test_extract_image_refs_bare_filename():
+    """Should detect bare filenames without path prefix."""
+    text = "what is in screenshot.png"
+    cleaned, paths = extract_image_refs(text)
+    assert "screenshot.png" in paths
+    assert "screenshot.png" not in cleaned
+
+
+def test_extract_image_refs_nested_path():
+    """Should detect paths with directories."""
+    text = "check images/photo.jpg for issues"
+    cleaned, paths = extract_image_refs(text)
+    assert "images/photo.jpg" in paths
 
 
 def test_extract_image_refs_no_images():

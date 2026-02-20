@@ -108,10 +108,24 @@ def extract_image_refs(text: str) -> tuple[str, list[str]]:
     cleaned = re.sub(tag_pattern, '', text).strip()
 
     # Also detect bare image paths in the text
-    word_pattern = r'(?:^|\s)((?:\./|/|\.\./)?\S+\.(?:png|jpg|jpeg|gif|bmp|webp|tiff|tif))'
+    # Matches: ./path.png, ../path.png, /path.png, path/to/img.png, img.png
+    word_pattern = (
+        r'(?:^|\s)'
+        r'((?:\.{0,2}/)?'  # optional ./ or ../ or /
+        r'(?:[\w./-]+/)?'  # optional directory path
+        r'[\w.-]+\.(?:png|jpg|jpeg|gif|bmp|webp|tiff|tif))'
+    )
     for match in re.finditer(word_pattern, cleaned, re.IGNORECASE):
         path = match.group(1).strip()
         if path not in image_paths:
             image_paths.append(path)
+
+    # Remove detected bare paths from the text so the LLM
+    # doesn't see both the image and the filename string
+    for path in image_paths:
+        cleaned = cleaned.replace(path, "").strip()
+
+    # Clean up extra whitespace
+    cleaned = re.sub(r'\s+', ' ', cleaned).strip()
 
     return cleaned, image_paths
