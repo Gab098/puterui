@@ -208,17 +208,7 @@ async def _handle_command(
         ui.console.print(result)
 
     elif command == "/persona":
-        if not arg:
-            ui.print_info(f"Current persona: {agent.persona.summary()}")
-            if agent.persona.backstory:
-                ui.console.print(f"  Backstory: {agent.persona.backstory}")
-            if agent.persona.quirks:
-                ui.console.print(
-                    f"  Quirks: {', '.join(agent.persona.quirks)}"
-                )
-        else:
-            ui.print_info("Persona details:")
-            ui.console.print(agent.persona.to_system_prompt())
+        await _handle_persona_command(arg, agent)
 
     elif command == "/skill":
         await _handle_skill_command(arg, agent)
@@ -235,6 +225,60 @@ async def _handle_command(
         )
 
     return None
+
+
+async def _handle_persona_command(arg: str, agent: Agent) -> None:
+    """Handle /persona subcommands."""
+    parts = arg.split(maxsplit=1)
+    subcmd = parts[0] if parts else ""
+
+    if not subcmd:
+        ui.print_info(f"Current persona: {agent.persona.summary()}")
+        if agent.persona.backstory:
+            ui.console.print(f"  Backstory: {agent.persona.backstory}")
+        if agent.persona.quirks:
+            ui.console.print(
+                f"  Quirks: {', '.join(agent.persona.quirks)}"
+            )
+
+    elif subcmd == "details":
+        ui.print_info("Persona details:")
+        ui.console.print(agent.persona.to_system_prompt())
+
+    elif subcmd == "list":
+        builtins = Persona.list_builtins()
+        if builtins:
+            ui.print_info("Built-in personas:")
+            for name in builtins:
+                p = Persona.load_builtin(name)
+                if p:
+                    ui.console.print(f"  {name} - {p.summary()}")
+        else:
+            ui.print_info("No built-in personas found.")
+
+    elif subcmd == "switch" or subcmd == "use":
+        name = parts[1].strip() if len(parts) > 1 else ""
+        if not name:
+            ui.print_error("Usage: /persona switch <name>")
+            return
+        new_persona = Persona.load_builtin(name)
+        if new_persona:
+            agent.persona = new_persona
+            agent.rebuild_system_prompt()
+            ui.print_success(
+                f"Switched to persona: {new_persona.summary()}"
+            )
+        else:
+            ui.print_error(
+                f"Persona '{name}' not found. "
+                f"Available: {', '.join(Persona.list_builtins())}"
+            )
+
+    else:
+        ui.print_info(
+            "Usage: /persona | /persona details | "
+            "/persona list | /persona switch <name>"
+        )
 
 
 async def _handle_skill_command(arg: str, agent: Agent) -> None:
@@ -367,7 +411,18 @@ async def async_main() -> None:
 
     # Load persona
     if args.persona:
-        persona = Persona.load(Path(args.persona).parent)
+        # Try as builtin name first, then as file path
+        persona = Persona.load_builtin(args.persona)
+        if persona is None:
+            persona_path = Path(args.persona)
+            if persona_path.exists():
+                persona = Persona.load(persona_path.parent)
+            else:
+                ui.print_warning(
+                    f"Persona '{args.persona}' not found. "
+                    f"Available builtins: {', '.join(Persona.list_builtins())}"
+                )
+                persona = Persona.load(project_dir)
     else:
         persona = Persona.load(project_dir)
 
@@ -376,6 +431,12 @@ async def async_main() -> None:
     skills.load_builtin_skills()
     skills.load_user_skills()
     skills.load_project_skills(project_dir)
+
+    # Auto-import OpenClaw configs if present
+    from puterui.openclaw_compat import auto_import_openclaw
+
+    if auto_import_openclaw(project_dir, persona, skills):
+        ui.print_info("Imported OpenClaw configuration.")
 
     agent = Agent(config, project_dir, persona=persona, skills=skills)
 

@@ -19,6 +19,7 @@ else:
 
 
 PERSONA_FILENAME = "persona.toml"
+BUILTIN_PERSONAS_DIR = Path(__file__).parent / "builtin_personas"
 
 DEFAULT_PERSONA = {
     "name": "Puter",
@@ -140,3 +141,31 @@ class Persona:
         """Return a short summary of the persona for display."""
         traits = ", ".join(self.traits[:3])
         return f"{self.name} ({self.role}) -- {traits}"
+
+    @classmethod
+    def load_builtin(cls, name: str) -> Optional["Persona"]:
+        """Load a built-in persona by name (e.g. 'hacker', 'osint-analyst')."""
+        if not BUILTIN_PERSONAS_DIR.is_dir():
+            return None
+
+        # Try exact match first, then with .toml extension
+        candidates = [
+            BUILTIN_PERSONAS_DIR / name,
+            BUILTIN_PERSONAS_DIR / f"{name}.toml",
+        ]
+        for path in candidates:
+            if path.exists() and path.is_file():
+                persona = cls()
+                persona._load_from_file(path)
+                return persona
+        return None
+
+    @classmethod
+    def list_builtins(cls) -> list[str]:
+        """List available built-in persona names."""
+        if not BUILTIN_PERSONAS_DIR.is_dir():
+            return []
+        return sorted(
+            p.stem for p in BUILTIN_PERSONAS_DIR.iterdir()
+            if p.suffix == ".toml"
+        )
