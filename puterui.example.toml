@@ -1,0 +1,27 @@
+# PuterUI Configuration
+# Copy this file to puterui.toml and customize as needed.
+
+# Ollama model to use (any model with tool-calling support)
+model = "qwen2.5-coder:7b"
+
+# Ollama API URL
+ollama_url = "http://localhost:11434"
+
+# Maximum tokens per response
+max_tokens = 4096
+
+# Temperature (0.0 = deterministic, 1.0 = creative)
+temperature = 0.1
+
+# Maximum tool-call iterations per user message
+max_iterations = 25
+
+# Optional custom system prompt (leave empty for default)
+# system_prompt = "You are a helpful coding assistant..."
+
+# Commands the assistant is allowed to execute
+allowed_commands = [
+    "ls", "cat", "head", "tail", "find", "grep", "wc",
+    "git", "python", "pip", "npm", "node", "cargo", "go",
+    "make", "echo", "pwd", "whoami", "date", "uname",
+]
