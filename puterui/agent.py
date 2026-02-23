@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Optional
 
@@ -40,7 +41,18 @@ Guidelines:
   using search_web/fetch_url.
 - If a missing capability blocks progress, propose and implement a minimal new tool or skill,
   then validate it with tests before using it.
+- When the task has multiple independent workstreams, propose mini-agents (sub-agents),
+  each with a focused goal, and keep their progress explicit.
 """
+
+
+@dataclass
+class MiniAgent:
+    """Lightweight sub-agent tracker for multitask workflows."""
+
+    name: str
+    goal: str
+    status: str = "planned"
 
 
 class Agent:
@@ -61,6 +73,7 @@ class Agent:
         self.terminal = TerminalManager(str(project_dir))
         self.browser = BrowserController()
         self.messages: list[dict[str, Any]] = []
+        self.mini_agents: dict[str, MiniAgent] = {}
 
         self._build_system_prompt()
 
@@ -83,12 +96,57 @@ class Agent:
         if skills_prompt:
             parts.append(skills_prompt)
 
+        # Mini-agents context
+        mini_prompt = self.get_mini_agents_prompt()
+        if mini_prompt:
+            parts.append(mini_prompt)
+
         # Project context
         parts.append(f"\nProject directory: {self.project_dir}")
 
         self.messages = [
             {"role": "system", "content": "\n".join(parts)},
         ]
+
+    def create_mini_agent(self, name: str, goal: str) -> str:
+        key = name.strip()
+        if not key:
+            return "Error: mini-agent name cannot be empty."
+        if not goal.strip():
+            return "Error: mini-agent goal cannot be empty."
+        self.mini_agents[key] = MiniAgent(name=key, goal=goal.strip())
+        self.rebuild_system_prompt()
+        return f"Mini-agent '{key}' created."
+
+    def update_mini_agent_status(self, name: str, status: str) -> str:
+        agent = self.mini_agents.get(name)
+        if agent is None:
+            return f"Error: mini-agent '{name}' not found."
+        allowed = {"planned", "running", "blocked", "done"}
+        norm = status.strip().lower()
+        if norm not in allowed:
+            return f"Error: invalid status '{status}'. Allowed: {', '.join(sorted(allowed))}"
+        agent.status = norm
+        self.rebuild_system_prompt()
+        return f"Mini-agent '{name}' set to {norm}."
+
+    def remove_mini_agent(self, name: str) -> str:
+        if name not in self.mini_agents:
+            return f"Error: mini-agent '{name}' not found."
+        del self.mini_agents[name]
+        self.rebuild_system_prompt()
+        return f"Mini-agent '{name}' removed."
+
+    def list_mini_agents(self) -> list[MiniAgent]:
+        return list(self.mini_agents.values())
+
+    def get_mini_agents_prompt(self) -> str:
+        if not self.mini_agents:
+            return ""
+        lines = ["\n# Active Mini-Agents"]
+        for ma in self.mini_agents.values():
+            lines.append(f"- {ma.name} [{ma.status}]: {ma.goal}")
+        return "\n".join(lines)
 
     def rebuild_system_prompt(self) -> None:
         """Rebuild system prompt (e.g. after activating a skill)."""

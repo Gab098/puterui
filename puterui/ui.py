@@ -10,11 +10,11 @@ from rich.text import Text
 from rich.theme import Theme
 
 THEME = Theme({
-    "info": "cyan",
-    "success": "green",
+    "info": "bright_cyan",
+    "success": "bright_green",
     "warning": "yellow",
     "error": "bold red",
-    "tool": "magenta",
+    "tool": "bright_magenta",
     "dim": "dim white",
 })
 
@@ -46,10 +46,10 @@ def print_quick_status(
 def print_banner() -> None:
     """Print the startup banner."""
     banner = Text()
-    banner.append("PuterUI", style="bold cyan")
+    banner.append("⚡ PuterUI", style="bold bright_cyan")
     banner.append(" v0.1.0", style="dim")
-    banner.append(" - lightweight AI coding assistant", style="dim white")
-    console.print(Panel(banner, border_style="cyan", padding=(0, 1)))
+    banner.append(" - hacker-grade AI coding assistant", style="dim white")
+    console.print(Panel(banner, border_style="bright_cyan", padding=(0, 1)))
 
 
 def print_model_info(model: str, url: str) -> None:
@@ -117,6 +117,10 @@ def print_help() -> None:
 - `/files` - List files in the project directory
 - `/status` - Show current session status (model, persona, skills, browser, terminals)
 - `/tools` - List available agent tools
+- `/mini list` - List mini-agents for multitask work
+- `/mini add <name> | <goal>` - Create a mini-agent
+- `/mini status <name> <planned|running|blocked|done>` - Update mini-agent status
+- `/mini remove <name>` - Remove a mini-agent
 
 **Persona:**
 - `/persona` - Show current persona identity
@@ -151,3 +155,29 @@ def print_help() -> None:
 - Multi-line input: end a line with `\\` to continue
 """
     console.print(Markdown(help_text))
+
+
+def print_mini_agents(items: list[tuple[str, str, str]]) -> None:
+    """Render mini-agents table in a clean dashboard style."""
+    if not items:
+        print_info("No mini-agents yet. Use /mini add <name> | <goal>")
+        return
+
+    table = Table(title="🧠 Mini-Agents", header_style="bold bright_cyan")
+    table.add_column("Name", style="bold")
+    table.add_column("Status")
+    table.add_column("Goal", overflow="fold")
+
+    status_style = {
+        "planned": "yellow",
+        "running": "bright_blue",
+        "blocked": "red",
+        "done": "green",
+    }
+
+    for name, status, goal in items:
+        color = status_style.get(status, "white")
+        styled_status = f"[{color}]{status}[/{color}]"
+        table.add_row(name, styled_status, goal)
+
+    console.print(table)

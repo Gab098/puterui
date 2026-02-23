@@ -247,6 +247,9 @@ async def _handle_command(
     elif command == "/browser":
         await _handle_browser_command(arg, agent)
 
+    elif command == "/mini":
+        _handle_mini_command(arg, agent)
+
     else:
         ui.print_warning(
             f"Unknown command: {command}. Type /help for available commands."
@@ -448,6 +451,59 @@ async def _handle_browser_command(arg: str, agent: Agent) -> None:
             "/browser stop | /browser status\n"
             "  The assistant uses browser tools automatically once started."
         )
+
+
+def _handle_mini_command(arg: str, agent: Agent) -> None:
+    """Handle /mini subcommands for lightweight multitask tracking."""
+    parts = arg.split(maxsplit=2)
+    subcmd = parts[0] if parts else ""
+
+    if subcmd in {"", "list"}:
+        items = [(m.name, m.status, m.goal) for m in agent.list_mini_agents()]
+        ui.print_mini_agents(items)
+        return
+
+    if subcmd == "add":
+        payload = arg[len("add"):].strip()
+        if "|" not in payload:
+            ui.print_error("Usage: /mini add <name> | <goal>")
+            return
+        name, goal = [x.strip() for x in payload.split("|", 1)]
+        msg = agent.create_mini_agent(name, goal)
+        if msg.startswith("Error:"):
+            ui.print_error(msg)
+        else:
+            ui.print_success(msg)
+        return
+
+    if subcmd == "status":
+        if len(parts) < 3:
+            ui.print_error("Usage: /mini status <name> <planned|running|blocked|done>")
+            return
+        name = parts[1].strip()
+        status = parts[2].strip()
+        msg = agent.update_mini_agent_status(name, status)
+        if msg.startswith("Error:"):
+            ui.print_error(msg)
+        else:
+            ui.print_success(msg)
+        return
+
+    if subcmd == "remove":
+        if len(parts) < 2:
+            ui.print_error("Usage: /mini remove <name>")
+            return
+        msg = agent.remove_mini_agent(parts[1].strip())
+        if msg.startswith("Error:"):
+            ui.print_error(msg)
+        else:
+            ui.print_success(msg)
+        return
+
+    ui.print_info(
+        "Usage: /mini list | /mini add <name> | <goal> | "
+        "/mini status <name> <planned|running|blocked|done> | /mini remove <name>"
+    )
 
 
 async def async_main() -> None:
