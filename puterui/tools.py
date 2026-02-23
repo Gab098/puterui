@@ -420,6 +420,11 @@ def _is_safe_path(path: Path, project_dir: Path) -> bool:
         return False
 
 
+def _to_display_path(path: Path) -> str:
+    """Normalize path separators for stable cross-platform display."""
+    return path.as_posix()
+
+
 async def tool_read_file(
     args: dict[str, Any], project_dir: Path
 ) -> str:
@@ -527,14 +532,14 @@ async def tool_list_files(
                     continue
                 rel = item.relative_to(project_dir)
                 suffix = "/" if item.is_dir() else ""
-                entries.append(f"{rel}{suffix}")
+                entries.append(f"{_to_display_path(rel)}{suffix}")
         else:
             for item in sorted(path.iterdir()):
                 if item.name.startswith("."):
                     continue
                 rel = item.relative_to(project_dir)
                 suffix = "/" if item.is_dir() else ""
-                entries.append(f"{rel}{suffix}")
+                entries.append(f"{_to_display_path(rel)}{suffix}")
 
         if not entries:
             return f"Directory '{args['path']}' is empty."
@@ -575,7 +580,7 @@ async def tool_search_files(
             for i, line in enumerate(text.splitlines(), 1):
                 if pattern.search(line):
                     rel = filepath.relative_to(project_dir)
-                    matches.append(f"{rel}:{i}: {line.strip()}")
+                    matches.append(f"{_to_display_path(rel)}:{i}: {line.strip()}")
                     if len(matches) >= max_matches:
                         break
             if len(matches) >= max_matches:

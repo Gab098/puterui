@@ -167,7 +167,12 @@ async def _handle_command(
         else:
             config.model = arg.strip()
             agent.client.config.model = arg.strip()
+            # Keep behavior predictable when switching providers/models:
+            # clear cross-model history and rebuild system prompt context.
+            agent.clear_history()
+            agent.rebuild_system_prompt()
             ui.print_success(f"Switched to model: {config.model}")
+            ui.print_info("Conversation history reset for the new model.")
 
     elif command == "/models":
         try:

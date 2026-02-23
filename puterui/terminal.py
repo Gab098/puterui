@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import shlex
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
@@ -44,22 +45,37 @@ class TerminalSession:
         Uses a fresh subprocess for each command but preserves the
         working directory via cd tracking.
         """
-        # Wrap command to capture the cwd after execution
         sentinel = f"__PUTERUI_END_{id(self)}__"
-        # Quote cwd to handle paths with spaces
-        quoted_cwd = self.cwd.replace("'", "'\\''")
-        wrapped = (
-            f"cd '{quoted_cwd}' 2>/dev/null; "
-            f"{command}; "
-            f"__exit_code=$?; "
-            f'echo "{sentinel}"; '
-            f"pwd; "
-            f"exit $__exit_code"
-        )
 
+        if os.name == "nt":
+            quoted_cwd = self.cwd.replace('"', '""')
+            wrapped = (
+                f'cd /d "{quoted_cwd}" && '
+                f"{command} & "
+                "set __exit_code=%errorlevel% & "
+                f"echo {sentinel} & "
+                "cd & "
+                "exit /b %__exit_code%"
+            )
+            spawn = asyncio.create_subprocess_exec
+            spawn_args = ["cmd.exe", "/d", "/s", "/c", wrapped]
+        else:
+            quoted_cwd = shlex.quote(self.cwd)
+            wrapped = (
+                f"cd {quoted_cwd} 2>/dev/null; "
+                f"{command}; "
+                f"__exit_code=$?; "
+                f'echo "{sentinel}"; '
+                "pwd; "
+                "exit $__exit_code"
+            )
+            spawn = asyncio.create_subprocess_shell
+            spawn_args = [wrapped]
+
+        proc: Optional[asyncio.subprocess.Process] = None
         try:
-            proc = await asyncio.create_subprocess_shell(
-                wrapped,
+            proc = await spawn(
+                *spawn_args,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self.cwd,
@@ -72,7 +88,7 @@ class TerminalSession:
             self._active_proc = None
         except asyncio.TimeoutError:
             # Kill the timed-out process
-            if proc.returncode is None:
+            if proc and proc.returncode is None:
                 try:
                     proc.kill()
                     await proc.wait()
@@ -100,7 +116,7 @@ class TerminalSession:
 
         # Extract new cwd from output
         if sentinel in stdout:
-            parts = stdout.split(sentinel)
+            parts = stdout.split(sentinel, 1)
             stdout = parts[0]
             new_cwd = parts[1].strip().splitlines()
             if new_cwd:
@@ -108,7 +124,7 @@ class TerminalSession:
                 if candidate and Path(candidate).is_dir():
                     self.cwd = candidate
 
-        exit_code = proc.returncode if proc.returncode is not None else -1
+        exit_code = proc.returncode if proc and proc.returncode is not None else -1
 
         result = CommandResult(
             stdout=stdout.rstrip(),
