@@ -45,20 +45,22 @@ def print_quick_status(
 
 def print_banner() -> None:
     """Print the startup banner."""
-    art = Text()
-    art.append("      .-''''-.\n", style="bright_magenta")
-    art.append("    .'  _  _  '.      ", style="bright_magenta")
-    art.append("⚡ PuterUI", style="bold bright_cyan")
-    art.append("\n", style="white")
-    art.append("   /   ( \\/ )   \\     ", style="bright_magenta")
-    art.append("v0.1.0", style="dim")
-    art.append("\n", style="white")
-    art.append("  |   .-====-.   |\n", style="bright_magenta")
-    art.append("  |  /  .--. \\  |   hacker-grade AI coding assistant\n", style="dim white")
-    art.append("   \\ | (____) | /\n", style="bright_magenta")
-    art.append("    '._\\____/_.     cyberpunk pin-up mode: online", style="bright_blue")
-    console.print(Panel(art, border_style="bright_cyan", padding=(0, 1)))
+    lines = [
+        ("      .-~~~~~-.", "bright_magenta"),
+        ("    .'  .-. .-. '.      ⚡ PuterUI", "bright_magenta"),
+        ("   /   (  o   o )  \\    v0.1.0", "bright_magenta"),
+        ("  (      .-^-.      )   hacker-grade AI coding assistant", "dim white"),
+        ("   '.   (_____)   .'", "bright_magenta"),
+        ("     '-.______.-'      neon pin-up mode: online", "bright_blue"),
+    ]
 
+    art = Text()
+    for idx, (line, style) in enumerate(lines):
+        art.append(line, style=style)
+        if idx < len(lines) - 1:
+            art.append("\n")
+
+    console.print(Panel(art, border_style="bright_cyan", padding=(0, 1)))
 
 def print_model_info(model: str, url: str) -> None:
     """Print the active model and Ollama URL."""
