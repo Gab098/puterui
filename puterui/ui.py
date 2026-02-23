@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from rich.console import Console
 from rich.markdown import Markdown
 from rich.panel import Panel
@@ -43,24 +45,27 @@ def print_quick_status(
 
     console.print(Panel(table, title="[bold cyan]session[/bold cyan]", border_style="cyan"))
 
+def _load_banner_art() -> str:
+    """Load external banner art if available, otherwise use a compact fallback."""
+    banner_file = Path(__file__).with_name("banner_ascii.txt")
+    if banner_file.exists():
+        return banner_file.read_text(encoding="utf-8").rstrip("\n")
+
+    return "\n".join([
+        "      .-~~~~~-.",
+        "    .'  .-. .-. '.      ⚡ PuterUI",
+        "   /   (  o   o )  \\    v0.1.0",
+        "  (      .-^-.      )   hacker-grade AI coding assistant",
+        "   '.   (_____)   .'",
+        "     '-.______.-'      neon pin-up mode: online",
+    ])
+
+
 def print_banner() -> None:
     """Print the startup banner."""
-    lines = [
-        ("      .-~~~~~-.", "bright_magenta"),
-        ("    .'  .-. .-. '.      ⚡ PuterUI", "bright_magenta"),
-        ("   /   (  o   o )  \\    v0.1.0", "bright_magenta"),
-        ("  (      .-^-.      )   hacker-grade AI coding assistant", "dim white"),
-        ("   '.   (_____)   .'", "bright_magenta"),
-        ("     '-.______.-'      neon pin-up mode: online", "bright_blue"),
-    ]
-
-    art = Text()
-    for idx, (line, style) in enumerate(lines):
-        art.append(line, style=style)
-        if idx < len(lines) - 1:
-            art.append("\n")
-
+    art = Text(_load_banner_art(), style="bright_magenta")
     console.print(Panel(art, border_style="bright_cyan", padding=(0, 1)))
+
 
 def print_model_info(model: str, url: str) -> None:
     """Print the active model and Ollama URL."""
