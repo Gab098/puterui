@@ -33,6 +33,20 @@ cd puterui
 pip install -e ".[dev]"
 ```
 
+## One-Click Start (cross-platform)
+
+If you want a single command that sets up `.venv`, installs deps, and starts PuterUI:
+
+```bash
+python one_click_start.py
+```
+
+On Windows (PowerShell), you can also use:
+
+```powershell
+py one_click_start.py
+```
+
 ## Quick Start
 
 1. Make sure Ollama is running:
