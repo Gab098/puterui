@@ -110,7 +110,7 @@ def print_help() -> None:
 - `/help` - Show this help message
 - `/quit` or `/exit` - Exit PuterUI
 - `/clear` - Clear conversation history
-- `/model <name>` - Switch to a different model
+- `/model <name>` - Switch to a different model (resets conversation history)
 - `/models` - List available models
 - `/config` - Show current configuration
 - `/compact` - Summarize conversation to save context
