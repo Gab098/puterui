@@ -46,15 +46,17 @@ def print_quick_status(
 def print_banner() -> None:
     """Print the startup banner."""
     art = Text()
-    art.append("  .-^-._\n", style="bright_magenta")
-    art.append(" /_/_\\_\\   ", style="bright_magenta")
+    art.append("      .-''''-.\n", style="bright_magenta")
+    art.append("    .'  _  _  '.      ", style="bright_magenta")
     art.append("⚡ PuterUI", style="bold bright_cyan")
     art.append("\n", style="white")
-    art.append("( o.o )    ", style="bright_magenta")
+    art.append("   /   ( \\/ )   \\     ", style="bright_magenta")
     art.append("v0.1.0", style="dim")
     art.append("\n", style="white")
-    art.append(" > ^ <     hacker-grade AI coding assistant\n", style="dim white")
-    art.append(" cyberpunk mode: online", style="bright_blue")
+    art.append("  |   .-====-.   |\n", style="bright_magenta")
+    art.append("  |  /  .--. \\  |   hacker-grade AI coding assistant\n", style="dim white")
+    art.append("   \\ | (____) | /\n", style="bright_magenta")
+    art.append("    '._\\____/_.     cyberpunk pin-up mode: online", style="bright_blue")
     console.print(Panel(art, border_style="bright_cyan", padding=(0, 1)))
 
 
