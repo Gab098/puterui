@@ -273,6 +273,59 @@ async def test_search_web_dispatch(project, monkeypatch):
     assert "https://example.com" in result
 
 
+
+
+@pytest.mark.asyncio
+async def test_browser_navigate_auto_start(project):
+    class FakeResult:
+        def __init__(self, success=True, data="ok", error=""):
+            self.success = success
+            self.data = data
+            self.error = error
+            self.url = "https://example.com"
+            self.title = "Example"
+
+    class FakeBrowser:
+        def __init__(self):
+            self.started = False
+
+        def status(self):
+            return "Running (playwright)" if self.started else "Not running"
+
+        async def start(self):
+            self.started = True
+            return FakeResult(success=True, data="Browser started")
+
+        async def navigate(self, url):
+            return FakeResult(success=True, data=f"Navigated to: {url}")
+
+    from puterui.tools import tool_browser_navigate
+
+    browser = FakeBrowser()
+    result = await tool_browser_navigate({"url": "https://example.com"}, browser)
+    assert "Navigated to" in result
+    assert browser.started is True
+
+
+@pytest.mark.asyncio
+async def test_browser_navigate_auto_start_failure(project):
+    class FakeResult:
+        def __init__(self, success=False, data="", error="boom"):
+            self.success = success
+            self.data = data
+            self.error = error
+
+    class FakeBrowser:
+        def status(self):
+            return "Not running"
+
+        async def start(self):
+            return FakeResult(success=False, error="backend missing")
+
+    from puterui.tools import tool_browser_navigate
+
+    result = await tool_browser_navigate({"url": "https://example.com"}, FakeBrowser())
+    assert "auto-start failed" in result
 @pytest.mark.asyncio
 async def test_execute_tool_dispatch(project):
     result = await execute_tool(

@@ -775,6 +775,10 @@ async def tool_browser_navigate(
     if browser is None:
         return "Error: browser not available. Use /browser start first."
 
+    start_error = await _ensure_browser_started(browser)
+    if start_error:
+        return start_error
+
     url = args.get("url", "")
     if not url:
         return "Error: no URL provided."
@@ -792,6 +796,10 @@ async def tool_browser_get_text(
     if browser is None:
         return "Error: browser not available."
 
+    start_error = await _ensure_browser_started(browser)
+    if start_error:
+        return start_error
+
     result = await browser.get_text()
     if result.success:
         header = f"Page: {result.title} ({result.url})\n---\n"
@@ -805,6 +813,10 @@ async def tool_browser_click(
     """Click an element in the browser."""
     if browser is None:
         return "Error: browser not available."
+
+    start_error = await _ensure_browser_started(browser)
+    if start_error:
+        return start_error
 
     selector = args.get("selector", "")
     if not selector:
@@ -822,6 +834,10 @@ async def tool_browser_type(
     """Type text into a browser element."""
     if browser is None:
         return "Error: browser not available."
+
+    start_error = await _ensure_browser_started(browser)
+    if start_error:
+        return start_error
 
     selector = args.get("selector", "")
     text = args.get("text", "")
@@ -841,6 +857,10 @@ async def tool_browser_screenshot(
     if browser is None:
         return "Error: browser not available."
 
+    start_error = await _ensure_browser_started(browser)
+    if start_error:
+        return start_error
+
     path = args.get("path")
     result = await browser.screenshot(path)
     if result.success:
@@ -855,6 +875,10 @@ async def tool_browser_js(
     if browser is None:
         return "Error: browser not available."
 
+    start_error = await _ensure_browser_started(browser)
+    if start_error:
+        return start_error
+
     script = args.get("script", "")
     if not script:
         return "Error: no script provided."
@@ -863,6 +887,25 @@ async def tool_browser_js(
     if result.success:
         return result.data
     return f"Error: {result.error}"
+
+
+async def _ensure_browser_started(browser: Any) -> str | None:
+    """Ensure browser backend is running before browser actions."""
+    try:
+        status = browser.status()
+    except Exception:
+        status = "Not running"
+
+    if status != "Not running":
+        return None
+
+    start_result = await browser.start()
+    if start_result.success:
+        return None
+    return (
+        "Error: browser is not running and auto-start failed. "
+        f"{start_result.error}"
+    )
 
 
 # ---------------------------------------------------------------------------
