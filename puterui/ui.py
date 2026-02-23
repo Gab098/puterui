@@ -45,11 +45,17 @@ def print_quick_status(
 
 def print_banner() -> None:
     """Print the startup banner."""
-    banner = Text()
-    banner.append("⚡ PuterUI", style="bold bright_cyan")
-    banner.append(" v0.1.0", style="dim")
-    banner.append(" - hacker-grade AI coding assistant", style="dim white")
-    console.print(Panel(banner, border_style="bright_cyan", padding=(0, 1)))
+    art = Text()
+    art.append("  .-^-._\n", style="bright_magenta")
+    art.append(" /_/_\\_\\   ", style="bright_magenta")
+    art.append("⚡ PuterUI", style="bold bright_cyan")
+    art.append("\n", style="white")
+    art.append("( o.o )    ", style="bright_magenta")
+    art.append("v0.1.0", style="dim")
+    art.append("\n", style="white")
+    art.append(" > ^ <     hacker-grade AI coding assistant\n", style="dim white")
+    art.append(" cyberpunk mode: online", style="bright_blue")
+    console.print(Panel(art, border_style="bright_cyan", padding=(0, 1)))
 
 
 def print_model_info(model: str, url: str) -> None:
