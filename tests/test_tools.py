@@ -7,10 +7,12 @@ import pytest
 from puterui.tools import (
     execute_tool,
     tool_edit_file,
+    tool_fetch_url,
     tool_list_files,
     tool_read_file,
     tool_run_command,
     tool_search_files,
+    tool_search_web,
     tool_write_file,
 )
 
@@ -168,6 +170,107 @@ async def test_run_command_blocked(project):
     )
     assert "Error" in result
     assert "not in the allowed list" in result
+
+
+@pytest.mark.asyncio
+async def test_fetch_url_success(monkeypatch):
+    class FakeResponse:
+        status = 200
+        headers = {"content-type": "text/plain"}
+
+        def read(self, _limit):
+            return b"hello from endpoint"
+
+        def geturl(self):
+            return "https://example.com/final"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    result = await tool_fetch_url({"url": "https://example.com"})
+    assert "Status: 200" in result
+    assert "hello from endpoint" in result
+
+
+@pytest.mark.asyncio
+async def test_fetch_url_dispatch(project, monkeypatch):
+    class FakeResponse:
+        status = 204
+        headers = {}
+
+        def read(self, _limit):
+            return b""
+
+        def geturl(self):
+            return "https://example.com"
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    result = await execute_tool("fetch_url", {"url": "https://example.com"}, project)
+    assert "Status: 204" in result
+
+
+@pytest.mark.asyncio
+async def test_search_web_success(monkeypatch):
+    class FakeResponse:
+        def read(self, _limit):
+            return (
+                b'<a class="result__a" href="https://example.com/tool-a">Tool A</a>'
+                b'<a class="result__a" href="https://example.com/tool-b">Tool B</a>'
+            )
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    result = await tool_search_web({"query": "bug bounty recon tools", "max_results": 2})
+    assert "Search query:" in result
+    assert "https://example.com/tool-a" in result
+
+
+
+
+@pytest.mark.asyncio
+async def test_fetch_url_blocks_localhost():
+    result = await tool_fetch_url({"url": "http://localhost:8080"})
+    assert "blocked" in result.lower()
+
+
+@pytest.mark.asyncio
+async def test_search_web_invalid_max_results():
+    result = await tool_search_web({"query": "test", "max_results": "abc"})
+    assert "max_results must be an integer" in result
+@pytest.mark.asyncio
+async def test_search_web_dispatch(project, monkeypatch):
+    class FakeResponse:
+        def read(self, _limit):
+            return b'<a class="result__a" href="https://example.com">Example</a>'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr("urllib.request.urlopen", lambda *_args, **_kwargs: FakeResponse())
+
+    result = await execute_tool("search_web", {"query": "x"}, project)
+    assert "https://example.com" in result
 
 
 @pytest.mark.asyncio

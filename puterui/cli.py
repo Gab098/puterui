@@ -56,18 +56,14 @@ async def run_interactive(agent: Agent, config: Config) -> None:
     ui.print_banner()
     ui.print_model_info(config.model, config.ollama_url)
 
-    # Show persona info
-    ui.console.print(
-        f"  Persona: [bold]{agent.persona.name}[/bold] "
-        f"({agent.persona.role})",
-        style="dim",
+    active = list(agent.skills.active.keys())
+    ui.print_quick_status(
+        model=config.model,
+        persona_name=agent.persona.name,
+        persona_role=agent.persona.role,
+        active_skills=active,
+        project_dir=str(agent.project_dir),
     )
-
-    # Show active skills
-    active = agent.skills.active
-    if active:
-        names = ", ".join(active.keys())
-        ui.console.print(f"  Skills: [bold]{names}[/bold]", style="dim")
 
     available = agent.skills.available
     if available:
@@ -206,6 +202,30 @@ async def _handle_command(
             {"path": ".", "recursive": False}, agent.project_dir
         )
         ui.console.print(result)
+
+    elif command == "/tools":
+        from puterui.tools import TOOL_DEFINITIONS
+
+        ui.print_info("Available tools:")
+        for tool in TOOL_DEFINITIONS:
+            fn = tool.get("function", {})
+            name = fn.get("name", "unknown")
+            desc = fn.get("description", "")
+            short_desc = desc.split(".")[0] if desc else ""
+            ui.console.print(f"  - {name}: {short_desc}")
+
+    elif command == "/status":
+        sessions = agent.terminal.list_sessions()
+        skills = list(agent.skills.active.keys())
+        ui.print_quick_status(
+            model=config.model,
+            persona_name=agent.persona.name,
+            persona_role=agent.persona.role,
+            active_skills=skills,
+            project_dir=str(agent.project_dir),
+        )
+        ui.console.print(f"  Browser: [dim]{agent.browser.status()}[/dim]")
+        ui.console.print(f"  Terminal sessions: [dim]{len(sessions)}[/dim]")
 
     elif command == "/image":
         await _handle_image_command(arg, agent)
