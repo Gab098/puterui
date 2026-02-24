@@ -13,6 +13,7 @@ def test_default_config():
     assert config.max_tokens == 4096
     assert config.temperature == 0.1
     assert config.max_iterations == 25
+    assert config.ollama_read_timeout == 600.0
     assert isinstance(config.allowed_commands, list)
     assert "git" in config.allowed_commands
 
@@ -40,8 +41,17 @@ def test_config_load_from_file(tmp_path):
         'model = "codellama:13b"\n'
         "temperature = 0.5\n"
         "max_tokens = 2048\n"
+        "ollama_read_timeout = 42\n"
     )
     config = Config.load(project_dir=tmp_path)
     assert config.model == "codellama:13b"
     assert config.temperature == 0.5
     assert config.max_tokens == 2048
+    assert config.ollama_read_timeout == 42.0
+
+
+def test_config_env_read_timeout(monkeypatch):
+    """Read-timeout env override should be parsed."""
+    monkeypatch.setenv("PUTERUI_OLLAMA_READ_TIMEOUT", "321")
+    config = Config.load(project_dir=Path("/nonexistent"))
+    assert config.ollama_read_timeout == 321.0

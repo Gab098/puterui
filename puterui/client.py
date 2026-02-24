@@ -30,7 +30,12 @@ class OllamaClient:
         self.base_url = config.ollama_url.rstrip("/")
         self._http = httpx.AsyncClient(
             base_url=self.base_url,
-            timeout=httpx.Timeout(connect=10.0, read=120.0, write=10.0, pool=10.0),
+            timeout=httpx.Timeout(
+                connect=10.0,
+                read=self.config.ollama_read_timeout,
+                write=10.0,
+                pool=10.0,
+            ),
         )
 
     async def close(self) -> None:

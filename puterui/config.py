@@ -19,6 +19,7 @@ DEFAULT_MODEL = "qwen2.5-coder:7b"
 DEFAULT_MAX_TOKENS = 4096
 DEFAULT_TEMPERATURE = 0.1
 DEFAULT_MAX_ITERATIONS = 25
+DEFAULT_OLLAMA_READ_TIMEOUT = 600.0
 
 
 @dataclass
@@ -30,6 +31,7 @@ class Config:
     max_tokens: int = DEFAULT_MAX_TOKENS
     temperature: float = DEFAULT_TEMPERATURE
     max_iterations: int = DEFAULT_MAX_ITERATIONS
+    ollama_read_timeout: float = DEFAULT_OLLAMA_READ_TIMEOUT
     system_prompt: str = ""
     allowed_commands: list[str] = field(default_factory=lambda: [
         "ls", "cat", "head", "tail", "find", "grep", "rg", "wc",
@@ -49,6 +51,11 @@ class Config:
             config.ollama_url = url
         if model := os.environ.get("PUTERUI_MODEL"):
             config.model = model
+        if timeout := os.environ.get("PUTERUI_OLLAMA_READ_TIMEOUT"):
+            try:
+                config.ollama_read_timeout = float(timeout)
+            except ValueError:
+                pass
 
         # Try loading from project-level config
         search_dirs = []
@@ -83,6 +90,8 @@ class Config:
             self.temperature = float(data["temperature"])
         if "max_iterations" in data:
             self.max_iterations = int(data["max_iterations"])
+        if "ollama_read_timeout" in data:
+            self.ollama_read_timeout = float(data["ollama_read_timeout"])
         if "system_prompt" in data:
             self.system_prompt = str(data["system_prompt"])
         if "allowed_commands" in data:

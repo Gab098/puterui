@@ -341,10 +341,17 @@ class Agent:
                 else:
                     error_msg = f"Ollama error: {exc}"
                     if "connection error" in str(exc).lower():
-                        ui.print_warning(
-                            "Model request failed with a connection error. "
-                            "Ollama may be up, but the selected model/backend may be unavailable."
-                        )
+                        if "readtimeout" in str(exc).lower():
+                            ui.print_warning(
+                                "Model request timed out waiting for tokens. "
+                                "Try increasing ollama_read_timeout in puterui.toml."
+                            )
+                        else:
+                            ui.print_warning(
+                                "Model request failed with a connection error. "
+                                "Ollama may be up, but the selected "
+                                "model/backend may be unavailable."
+                            )
                     ui.print_error(error_msg)
                     self._append_task_log("error", {"message": error_msg})
                     return error_msg

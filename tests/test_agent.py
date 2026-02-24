@@ -148,3 +148,27 @@ async def test_streaming_response_skips_panel_print(tmp_path, monkeypatch):
 
     assert result == "A"
     assert panel_calls == []
+
+
+@pytest.mark.asyncio
+async def test_read_timeout_warning_hint(tmp_path, monkeypatch):
+    from puterui.client import OllamaError
+
+    agent = Agent(Config(), tmp_path)
+
+    class FakeClient:
+        async def chat(self, messages, tools=None):
+            raise OllamaError(
+                "Connection error to http://localhost:11434 (model: x): ReadTimeout"
+            )
+
+    warnings: list[str] = []
+    monkeypatch.setattr("puterui.ui.print_warning", lambda msg: warnings.append(msg))
+    monkeypatch.setattr("puterui.ui.print_error", lambda _msg: None)
+
+    agent.client = FakeClient()
+    agent.messages.append({"role": "user", "content": "hi"})
+
+    result = await agent._run_agent_loop()
+    assert "ReadTimeout" in result
+    assert any("ollama_read_timeout" in msg for msg in warnings)

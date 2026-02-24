@@ -198,6 +198,7 @@ async def _handle_command(
         ui.console.print(f"  Ollama URL:     {config.ollama_url}")
         ui.console.print(f"  Max tokens:     {config.max_tokens}")
         ui.console.print(f"  Temperature:    {config.temperature}")
+        ui.console.print(f"  Read timeout:   {config.ollama_read_timeout}s")
         ui.console.print(f"  Max iterations: {config.max_iterations}")
         ui.console.print(f"  Project dir:    {agent.project_dir}")
 
