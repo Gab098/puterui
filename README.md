@@ -11,7 +11,7 @@ A lightweight terminal-based AI coding assistant powered by [Ollama](https://oll
 - **Mini-agent multitasking**: Create lightweight sub-agents in REPL to track parallel workstreams (`/mini ...`).
 - **Terminal control**: Persistent shell sessions with working directory tracking -- like having a real terminal.
 - **Browser control**: Navigate, click, type, screenshot, and run JS in your browser via Playwright or Selenium.
-- **Lightweight**: Minimal dependencies (httpx, rich, prompt-toolkit, pydantic). No heavy frameworks.
+- **Lightweight**: Minimal dependencies (httpx, rich, prompt-toolkit). No heavy frameworks.
 - **Interactive REPL**: Rich terminal UI with markdown rendering, session dashboards, and command palettes.
 - **One-shot mode**: Pass a prompt directly for scripting/CI use cases.
 - **Safe by default**: Command allowlist for `run_command`, file access sandboxed to project directory.
