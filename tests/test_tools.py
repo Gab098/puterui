@@ -6,13 +6,11 @@ import pytest
 
 from puterui.tools import (
     execute_tool,
-    tool_codebase_outline,
     tool_edit_file,
     tool_fetch_url,
     tool_list_files,
     tool_read_file,
     tool_run_command,
-    tool_scan_ports,
     tool_search_files,
     tool_search_web,
     tool_write_file,
@@ -273,63 +271,6 @@ async def test_search_web_dispatch(project, monkeypatch):
 
     result = await execute_tool("search_web", {"query": "x"}, project)
     assert "https://example.com" in result
-
-
-@pytest.mark.asyncio
-async def test_scan_ports_blocks_localhost():
-    result = await tool_scan_ports({"host": "localhost"})
-    assert "blocked" in result.lower()
-
-
-@pytest.mark.asyncio
-async def test_scan_ports_invalid_ports():
-    result = await tool_scan_ports({"host": "example.com", "ports": "abc"})
-    assert "invalid port" in result.lower()
-
-
-@pytest.mark.asyncio
-async def test_scan_ports_dispatch(project, monkeypatch):
-    monkeypatch.setattr("socket.gethostbyname", lambda _host: "93.184.216.34")
-
-    class FakeSocket:
-        def __init__(self, *_args, **_kwargs):
-            self.timeout = None
-
-        def settimeout(self, timeout):
-            self.timeout = timeout
-
-        def connect_ex(self, addr):
-            _ip, port = addr
-            return 0 if port == 443 else 1
-
-        def close(self):
-            return None
-
-    monkeypatch.setattr("socket.socket", lambda *_args, **_kwargs: FakeSocket())
-
-    result = await execute_tool(
-        "scan_ports",
-        {"host": "example.com", "ports": "80,443"},
-        project,
-    )
-    assert "Open ports: 1" in result
-    assert "Open list: 443" in result
-
-
-@pytest.mark.asyncio
-async def test_codebase_outline(project):
-    result = await tool_codebase_outline({"path": "."}, project)
-    assert "Files scanned:" in result
-    assert "Top languages:" in result
-    assert "hello.py" in result
-
-
-@pytest.mark.asyncio
-async def test_codebase_outline_dispatch(project):
-    result = await execute_tool("codebase_outline", {"path": "."}, project)
-    assert "Files scanned:" in result
-
-
 
 
 
