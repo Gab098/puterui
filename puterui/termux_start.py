@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import os
 import subprocess
 import sys
@@ -24,20 +25,47 @@ def _venv_python(venv_dir: Path) -> Path:
     return venv_dir / "bin" / "python"
 
 
+def _is_shared_storage_path(path: Path) -> bool:
+    """Return True for Android shared-storage mounts (problematic for venv symlinks)."""
+    resolved = path.resolve()
+    as_posix = resolved.as_posix()
+    return as_posix.startswith("/storage/") or as_posix.startswith("/sdcard/")
+
+
+def choose_venv_dir(root: Path, env: dict[str, str] | None = None) -> Path:
+    """Choose a Termux-safe venv directory.
+
+    On shared storage, prefer an app-private/home path because creating venv
+    symlinks (e.g. lib64 -> lib) often fails there.
+    """
+    env = env or os.environ
+
+    if override := env.get("PUTERUI_TERMUX_VENV"):
+        return Path(override).expanduser()
+
+    in_termux = is_termux_environment(env)
+    if in_termux and _is_shared_storage_path(root):
+        root_hash = hashlib.sha1(str(root).encode("utf-8")).hexdigest()[:8]
+        return Path.home() / ".local" / "share" / "puterui" / "venvs" / f"{root.name}-{root_hash}"
+
+    return root / ".venv-termux"
+
+
 def run(cmd: list[str], cwd: Path | None = None) -> None:
     printable = " ".join(cmd)
     print(f"\n>> {printable}")
     subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True)
 
 
-def ensure_venv(root: Path, venv_name: str = ".venv-termux") -> Path:
+def ensure_venv(root: Path, env: dict[str, str] | None = None) -> Path:
     """Create a local venv dedicated to Termux runs if it does not exist."""
-    venv_dir = root / venv_name
+    venv_dir = choose_venv_dir(root, env)
     py = _venv_python(venv_dir)
     if py.exists():
         return py
 
-    print(f"Creating virtual environment ({venv_name})...")
+    print(f"Creating virtual environment ({venv_dir})...")
+    venv_dir.parent.mkdir(parents=True, exist_ok=True)
     run([sys.executable, "-m", "venv", str(venv_dir)], cwd=root)
     return py
 
@@ -88,6 +116,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if not is_termux_environment():
         print("Warning: Termux environment not detected; continuing anyway.")
+    elif _is_shared_storage_path(root):
+        print(
+            "Detected shared storage checkout. Using a home-directory venv "
+            "to avoid Termux permission/symlink issues."
+        )
 
     passthrough = args.puterui_args
     if passthrough and passthrough[0] == "--":

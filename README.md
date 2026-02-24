@@ -66,7 +66,7 @@ puterui-termux -- --model qwen2.5-coder:7b
 puterui-termux --dev
 ```
 
-This launcher creates a local `.venv-termux`, installs dependencies without root, and starts PuterUI from that environment.
+This launcher creates a local virtualenv and installs dependencies without root. If the repo is under Android shared storage (for example `/storage/emulated/0/...`), it automatically places the venv under `~/.local/share/puterui/venvs/` to avoid Termux symlink permission issues. You can override the venv path with `PUTERUI_TERMUX_VENV=/path/to/venv`.
 
 ## Quick Start
 
