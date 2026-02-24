@@ -74,6 +74,7 @@ class Agent:
         self.browser = BrowserController()
         self.messages: list[dict[str, Any]] = []
         self.mini_agents: dict[str, MiniAgent] = {}
+        self._tools_supported = True
 
         self._build_system_prompt()
 
@@ -243,19 +244,41 @@ class Agent:
         self.messages.append(message)
         return await self._run_agent_loop()
 
+    def _is_tools_unsupported_error(self, exc: OllamaError) -> bool:
+        """Detect provider errors indicating the selected model cannot use tools."""
+        msg = str(exc).lower()
+        return "does not support tools" in msg or "unsupported tools" in msg
+
     async def _run_agent_loop(self) -> str:
         """Execute the agent loop (LLM call + tool execution cycle)."""
 
         for _iteration in range(self.config.max_iterations):
+            tools_payload = TOOL_DEFINITIONS if self._tools_supported else None
             try:
                 response = await self.client.chat(
                     messages=self.messages,
-                    tools=TOOL_DEFINITIONS,
+                    tools=tools_payload,
                 )
             except OllamaError as exc:
-                error_msg = f"Ollama error: {exc}"
-                ui.print_error(error_msg)
-                return error_msg
+                if self._tools_supported and self._is_tools_unsupported_error(exc):
+                    self._tools_supported = False
+                    ui.print_warning(
+                        "Current model does not support tool-calls. "
+                        "Retrying in text-only mode."
+                    )
+                    try:
+                        response = await self.client.chat(
+                            messages=self.messages,
+                            tools=None,
+                        )
+                    except OllamaError as inner_exc:
+                        error_msg = f"Ollama error: {inner_exc}"
+                        ui.print_error(error_msg)
+                        return error_msg
+                else:
+                    error_msg = f"Ollama error: {exc}"
+                    ui.print_error(error_msg)
+                    return error_msg
 
             message = response.get("message", {})
             content = message.get("content", "")

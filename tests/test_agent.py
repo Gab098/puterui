@@ -1,5 +1,7 @@
 """Tests for agent workflow helpers."""
 
+import pytest
+
 from puterui.agent import Agent
 from puterui.config import Config
 
@@ -34,3 +36,61 @@ def test_mini_agent_validation(tmp_path):
     assert "Error" in agent.update_mini_agent_status("x", "invalid")
     assert "Error" in agent.update_mini_agent_status("nope", "running")
     assert "Error" in agent.remove_mini_agent("nope")
+
+
+@pytest.mark.asyncio
+async def test_fallback_when_model_does_not_support_tools(tmp_path, monkeypatch):
+    from puterui.client import OllamaError
+
+    agent = Agent(Config(), tmp_path)
+    calls = []
+
+    class FakeClient:
+        async def chat(self, messages, tools=None):
+            calls.append(tools)
+            if tools is not None:
+                raise OllamaError(
+                    "Ollama API error (400): model does not support tools"
+                )
+            return {
+                "message": {
+                    "role": "assistant",
+                    "content": "hello text-only",
+                    "tool_calls": [],
+                }
+            }
+
+    warnings = []
+    monkeypatch.setattr("puterui.ui.print_warning", lambda msg: warnings.append(msg))
+    monkeypatch.setattr("puterui.ui.print_assistant", lambda _msg: None)
+
+    agent.client = FakeClient()
+    agent.messages.append({"role": "user", "content": "hi"})
+
+    result = await agent._run_agent_loop()
+
+    assert result == "hello text-only"
+    assert calls[0] is not None
+    assert calls[1] is None
+    assert any("text-only mode" in msg for msg in warnings)
+
+
+@pytest.mark.asyncio
+async def test_tools_disabled_persist_after_detection(tmp_path, monkeypatch):
+    agent = Agent(Config(), tmp_path)
+    agent._tools_supported = False
+
+    seen_tools = []
+
+    class FakeClient:
+        async def chat(self, messages, tools=None):
+            seen_tools.append(tools)
+            return {"message": {"role": "assistant", "content": "ok", "tool_calls": []}}
+
+    agent.client = FakeClient()
+    monkeypatch.setattr("puterui.ui.print_assistant", lambda _msg: None)
+    agent.messages.append({"role": "user", "content": "hello"})
+
+    result = await agent._run_agent_loop()
+    assert result == "ok"
+    assert seen_tools == [None]
