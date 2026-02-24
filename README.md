@@ -48,6 +48,26 @@ On Windows (PowerShell), you can also use:
 py one_click_start.py
 ```
 
+### Termux (no root)
+
+Use the dedicated launcher command:
+
+```bash
+puterui-termux
+```
+
+Useful options:
+
+```bash
+# pass args to puterui
+puterui-termux -- --model qwen2.5-coder:7b
+
+# install dev extras in the Termux venv
+puterui-termux --dev
+```
+
+This launcher creates a local `.venv-termux`, installs dependencies without root, and starts PuterUI from that environment.
+
 ## Quick Start
 
 1. Make sure Ollama is running:

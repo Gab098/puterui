@@ -49,6 +49,7 @@ browser-selenium = [
 
 [project.scripts]
 puterui = "puterui.cli:main"
+puterui-termux = "puterui.termux_start:main"
 
 [tool.ruff]
 target-version = "py39"
