@@ -155,6 +155,10 @@ class Agent:
         self._build_system_prompt()
         self.messages.extend(old_messages)
 
+    def on_model_switch(self) -> None:
+        """Reset per-model runtime capability flags after switching model."""
+        self._tools_supported = True
+
     async def close(self) -> None:
         await self.client.close()
         await self.terminal.close_all()
@@ -277,6 +281,11 @@ class Agent:
                         return error_msg
                 else:
                     error_msg = f"Ollama error: {exc}"
+                    if "connection error" in str(exc).lower():
+                        ui.print_warning(
+                            "Model request failed with a connection error. "
+                            "Ollama may be up, but the selected model/backend may be unavailable."
+                        )
                     ui.print_error(error_msg)
                     return error_msg
 

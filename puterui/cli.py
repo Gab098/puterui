@@ -171,6 +171,7 @@ async def _handle_command(
             # clear cross-model history and rebuild system prompt context.
             agent.clear_history()
             agent.rebuild_system_prompt()
+            agent.on_model_switch()
             ui.print_success(f"Switched to model: {config.model}")
             ui.print_info("Conversation history reset for the new model.")
 

@@ -94,3 +94,12 @@ async def test_tools_disabled_persist_after_detection(tmp_path, monkeypatch):
     result = await agent._run_agent_loop()
     assert result == "ok"
     assert seen_tools == [None]
+
+
+def test_model_switch_resets_tool_capability_flag(tmp_path):
+    agent = Agent(Config(), tmp_path)
+    agent._tools_supported = False
+
+    agent.on_model_switch()
+
+    assert agent._tools_supported is True
