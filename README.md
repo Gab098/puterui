@@ -11,7 +11,7 @@ A lightweight terminal-based AI coding assistant powered by [Ollama](https://oll
 - **Mini-agent multitasking**: Create lightweight sub-agents in REPL to track parallel workstreams (`/mini ...`).
 - **Terminal control**: Persistent shell sessions with working directory tracking -- like having a real terminal.
 - **Browser control**: Navigate, click, type, screenshot, and run JS in your browser via Playwright or Selenium.
-- **Lightweight**: Minimal dependencies (httpx, rich, prompt-toolkit, pydantic). No heavy frameworks.
+- **Lightweight**: Minimal dependencies (httpx, rich, prompt-toolkit). No heavy frameworks.
 - **Interactive REPL**: Rich terminal UI with markdown rendering, session dashboards, and command palettes.
 - **One-shot mode**: Pass a prompt directly for scripting/CI use cases.
 - **Safe by default**: Command allowlist for `run_command`, file access sandboxed to project directory.
@@ -47,6 +47,26 @@ On Windows (PowerShell), you can also use:
 ```powershell
 py one_click_start.py
 ```
+
+### Termux (no root)
+
+Use the dedicated launcher command:
+
+```bash
+puterui-termux
+```
+
+Useful options:
+
+```bash
+# pass args to puterui
+puterui-termux -- --model qwen2.5-coder:7b
+
+# install dev extras in the Termux venv
+puterui-termux --dev
+```
+
+This launcher creates a local virtualenv and installs dependencies without root. If the repo is under Android shared storage (for example `/storage/emulated/0/...`), it automatically places the venv under `~/.local/share/puterui/venvs/` to avoid Termux symlink permission issues. You can override the venv path with `PUTERUI_TERMUX_VENV=/path/to/venv`.
 
 ## Quick Start
 
