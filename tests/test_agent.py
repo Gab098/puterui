@@ -103,3 +103,48 @@ def test_model_switch_resets_tool_capability_flag(tmp_path):
     agent.on_model_switch()
 
     assert agent._tools_supported is True
+
+
+@pytest.mark.asyncio
+async def test_task_log_records_prompt_and_response(tmp_path, monkeypatch):
+    agent = Agent(Config(), tmp_path)
+
+    class FakeClient:
+        async def chat_stream(self, messages, tools=None):
+            yield {"message": {"role": "assistant", "content": "Hello"}}
+            yield {"message": {"role": "assistant", "content": " world"}}
+
+    monkeypatch.setattr("puterui.ui.print_stream_start", lambda: None)
+    monkeypatch.setattr("puterui.ui.print_stream_chunk", lambda _text: None)
+    monkeypatch.setattr("puterui.ui.print_stream_end", lambda: None)
+
+    agent.client = FakeClient()
+    result = await agent.send("hi there")
+
+    assert result == "Hello world"
+    log_path = tmp_path / ".puterui" / "tasks.log"
+    assert log_path.exists()
+    log_text = log_path.read_text(encoding="utf-8")
+    assert '"event": "user_prompt"' in log_text
+    assert '"event": "assistant_response"' in log_text
+
+
+@pytest.mark.asyncio
+async def test_streaming_response_skips_panel_print(tmp_path, monkeypatch):
+    agent = Agent(Config(), tmp_path)
+
+    class FakeClient:
+        async def chat_stream(self, messages, tools=None):
+            yield {"message": {"role": "assistant", "content": "A"}}
+
+    panel_calls: list[str] = []
+    monkeypatch.setattr("puterui.ui.print_stream_start", lambda: None)
+    monkeypatch.setattr("puterui.ui.print_stream_chunk", lambda _text: None)
+    monkeypatch.setattr("puterui.ui.print_stream_end", lambda: None)
+    monkeypatch.setattr("puterui.ui.print_assistant", lambda text: panel_calls.append(text))
+
+    agent.client = FakeClient()
+    result = await agent.send("stream please")
+
+    assert result == "A"
+    assert panel_calls == []

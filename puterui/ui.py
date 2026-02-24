@@ -76,6 +76,22 @@ def print_model_info(model: str, url: str) -> None:
     )
 
 
+
+
+def print_stream_start() -> None:
+    """Start a streaming assistant response block."""
+    console.print("\n[bold cyan]assistant[/bold cyan] > ", end="")
+
+
+def print_stream_chunk(text: str) -> None:
+    """Print one streamed assistant text chunk."""
+    console.print(text, end="", markup=False, highlight=False)
+
+
+def print_stream_end() -> None:
+    """Finish a streaming assistant response line."""
+    console.print()
+
 def print_assistant(text: str) -> None:
     """Render the assistant's response as Markdown."""
     md = Markdown(text)

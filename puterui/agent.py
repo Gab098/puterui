@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -75,6 +77,7 @@ class Agent:
         self.messages: list[dict[str, Any]] = []
         self.mini_agents: dict[str, MiniAgent] = {}
         self._tools_supported = True
+        self._task_log_path = self.project_dir / ".puterui" / "tasks.log"
 
         self._build_system_prompt()
 
@@ -155,6 +158,53 @@ class Agent:
         self._build_system_prompt()
         self.messages.extend(old_messages)
 
+    def _append_task_log(self, event: str, payload: dict[str, Any]) -> None:
+        """Append structured task events to .puterui/tasks.log."""
+        try:
+            self._task_log_path.parent.mkdir(parents=True, exist_ok=True)
+            record = {
+                "ts": datetime.now(timezone.utc).isoformat(),
+                "event": event,
+                "payload": payload,
+            }
+            with self._task_log_path.open("a", encoding="utf-8") as f:
+                f.write(json.dumps(record, ensure_ascii=False) + "\n")
+        except Exception:
+            # Logging must never break agent flow.
+            return
+
+    async def _chat_with_streaming(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+    ) -> tuple[dict[str, Any], bool]:
+        """Call Ollama with streaming; return assembled response and whether text was streamed."""
+        content_parts: list[str] = []
+        last_message: dict[str, Any] = {}
+        streamed_text = False
+
+        if not hasattr(self.client, "chat_stream"):
+            response = await self.client.chat(messages=messages, tools=tools)
+            return response, False
+
+        async for chunk in self.client.chat_stream(messages=messages, tools=tools):
+            message = chunk.get("message", {})
+            if message:
+                last_message = {**last_message, **message}
+            piece = message.get("content", "")
+            if piece:
+                if not streamed_text:
+                    ui.print_stream_start()
+                    streamed_text = True
+                ui.print_stream_chunk(piece)
+                content_parts.append(piece)
+
+        if streamed_text:
+            ui.print_stream_end()
+            last_message["content"] = "".join(content_parts)
+
+        return {"message": last_message}, streamed_text
+
     def on_model_switch(self) -> None:
         """Reset per-model runtime capability flags after switching model."""
         self._tools_supported = True
@@ -227,6 +277,7 @@ class Agent:
             return await self.send_with_images(cleaned, image_paths)
 
         self.messages.append({"role": "user", "content": user_message})
+        self._append_task_log("user_prompt", {"text": user_message})
         return await self._run_agent_loop()
 
     async def send_with_images(
@@ -258,11 +309,17 @@ class Agent:
 
         for _iteration in range(self.config.max_iterations):
             tools_payload = TOOL_DEFINITIONS if self._tools_supported else None
+            streamed_text = False
             try:
-                response = await self.client.chat(
+                response, streamed_text = await self._chat_with_streaming(
                     messages=self.messages,
                     tools=tools_payload,
                 )
+                if not response.get("message"):
+                    response = await self.client.chat(
+                        messages=self.messages,
+                        tools=tools_payload,
+                    )
             except OllamaError as exc:
                 if self._tools_supported and self._is_tools_unsupported_error(exc):
                     self._tools_supported = False
@@ -275,9 +332,11 @@ class Agent:
                             messages=self.messages,
                             tools=None,
                         )
+                        streamed_text = False
                     except OllamaError as inner_exc:
                         error_msg = f"Ollama error: {inner_exc}"
                         ui.print_error(error_msg)
+                        self._append_task_log("error", {"message": error_msg})
                         return error_msg
                 else:
                     error_msg = f"Ollama error: {exc}"
@@ -287,6 +346,7 @@ class Agent:
                             "Ollama may be up, but the selected model/backend may be unavailable."
                         )
                     ui.print_error(error_msg)
+                    self._append_task_log("error", {"message": error_msg})
                     return error_msg
 
             message = response.get("message", {})
@@ -306,6 +366,7 @@ class Agent:
                     # Show the tool call in the UI
                     args_summary = _summarize_args(tool_args)
                     ui.print_tool_call(tool_name, args_summary)
+                    self._append_task_log("tool_call", {"name": tool_name, "args": tool_args})
 
                     # Execute with all contexts
                     result = await execute_tool(
@@ -318,6 +379,10 @@ class Agent:
                     )
 
                     ui.print_tool_result(result)
+                    self._append_task_log(
+                        "tool_result",
+                        {"name": tool_name, "result": result[:800]},
+                    )
 
                     # Add tool result to messages
                     self.messages.append({
@@ -329,8 +394,10 @@ class Agent:
                 continue
 
             # No tool calls -- we have a final text response
-            if content:
+            if content and not streamed_text:
                 ui.print_assistant(content)
+            if content:
+                self._append_task_log("assistant_response", {"text": content[:1500]})
             return content
 
         # Exhausted iterations
