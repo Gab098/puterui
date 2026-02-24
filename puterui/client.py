@@ -13,6 +13,40 @@ from puterui.config import Config
 class OllamaError(Exception):
     """Raised when the Ollama API returns an error."""
 
+def _format_ollama_http_error(status_code: int, body: str) -> str:
+    """Format Ollama HTTP errors into actionable messages."""
+    message = f"Ollama API error ({status_code})"
+
+    parsed: dict[str, Any] | None = None
+    try:
+        candidate = json.loads(body)
+        if isinstance(candidate, dict):
+            parsed = candidate
+    except Exception:
+        parsed = None
+
+    if parsed is None:
+        snippet = body.strip()
+        if snippet:
+            return f"{message}: {snippet}"
+        return message
+
+    err = str(parsed.get("error", "")).strip()
+    signin_url = str(parsed.get("signin_url", "")).strip()
+
+    if status_code == 401 and signin_url:
+        detail = err or "unauthorized"
+        return (
+            f"{message}: {detail}.\n"
+            "This model/provider requires Ollama account authentication.\n"
+            f"Sign in by opening: {signin_url}"
+        )
+
+    if err:
+        return f"{message}: {err}"
+
+    return f"{message}: {body.strip()}"
+
 
 class OllamaClient:
     """Lightweight async client for the Ollama chat API."""
@@ -61,7 +95,8 @@ class OllamaClient:
             return resp.json()
         except httpx.HTTPStatusError as exc:
             body = exc.response.text
-            raise OllamaError(f"Ollama API error ({exc.response.status_code}): {body}") from exc
+            msg = _format_ollama_http_error(exc.response.status_code, body)
+            raise OllamaError(msg) from exc
         except httpx.HTTPError as exc:
             raise OllamaError(f"Connection error: {exc}") from exc
 
@@ -90,9 +125,9 @@ class OllamaClient:
                     if line.strip():
                         yield json.loads(line)
         except httpx.HTTPStatusError as exc:
-            raise OllamaError(
-                f"Ollama API error ({exc.response.status_code})"
-            ) from exc
+            body = exc.response.text
+            msg = _format_ollama_http_error(exc.response.status_code, body)
+            raise OllamaError(msg) from exc
         except httpx.HTTPError as exc:
             raise OllamaError(f"Connection error: {exc}") from exc
 
