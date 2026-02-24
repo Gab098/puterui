@@ -10,6 +10,14 @@ import httpx
 from puterui.config import Config
 
 
+def _format_http_error(exc: Exception) -> str:
+    """Build a useful HTTP error string even when exception text is empty."""
+    detail = str(exc).strip()
+    if detail:
+        return detail
+    return exc.__class__.__name__
+
+
 class OllamaError(Exception):
     """Raised when the Ollama API returns an error."""
 
@@ -63,7 +71,10 @@ class OllamaClient:
             body = exc.response.text
             raise OllamaError(f"Ollama API error ({exc.response.status_code}): {body}") from exc
         except httpx.HTTPError as exc:
-            raise OllamaError(f"Connection error: {exc}") from exc
+            detail = _format_http_error(exc)
+            raise OllamaError(
+                f"Connection error to {self.base_url} (model: {self.config.model}): {detail}"
+            ) from exc
 
     async def chat_stream(
         self,
@@ -94,7 +105,10 @@ class OllamaClient:
                 f"Ollama API error ({exc.response.status_code})"
             ) from exc
         except httpx.HTTPError as exc:
-            raise OllamaError(f"Connection error: {exc}") from exc
+            detail = _format_http_error(exc)
+            raise OllamaError(
+                f"Connection error to {self.base_url} (model: {self.config.model}): {detail}"
+            ) from exc
 
     async def check_health(self) -> bool:
         """Check if Ollama is reachable."""
