@@ -92,6 +92,22 @@ def print_stream_end() -> None:
     """Finish a streaming assistant response line."""
     console.print()
 
+
+
+def print_reasoning_start() -> None:
+    """Start a streaming reasoning block."""
+    console.print("  [dim italic]thinking > [/dim italic]", end="")
+
+
+def print_reasoning_chunk(text: str) -> None:
+    """Print one streamed reasoning chunk."""
+    console.print(text, end="", markup=False, highlight=False)
+
+
+def print_reasoning_end() -> None:
+    """Finish a streaming reasoning line."""
+    console.print()
+
 def print_assistant(text: str) -> None:
     """Render the assistant's response as Markdown."""
     md = Markdown(text)

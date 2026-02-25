@@ -177,20 +177,30 @@ class Agent:
         self,
         messages: list[dict[str, Any]],
         tools: list[dict[str, Any]] | None,
-    ) -> tuple[dict[str, Any], bool]:
-        """Call Ollama with streaming; return assembled response and whether text was streamed."""
+    ) -> tuple[dict[str, Any], bool, bool]:
+        """Call Ollama with streaming; return assembled response and stream flags."""
         content_parts: list[str] = []
+        reasoning_parts: list[str] = []
         last_message: dict[str, Any] = {}
         streamed_text = False
+        streamed_reasoning = False
 
         if not hasattr(self.client, "chat_stream"):
             response = await self.client.chat(messages=messages, tools=tools)
-            return response, False
+            return response, False, False
 
         async for chunk in self.client.chat_stream(messages=messages, tools=tools):
             message = chunk.get("message", {})
             if message:
                 last_message = {**last_message, **message}
+            reasoning_piece = message.get("thinking") or chunk.get("thinking") or ""
+            if reasoning_piece:
+                if not streamed_reasoning:
+                    ui.print_reasoning_start()
+                    streamed_reasoning = True
+                ui.print_reasoning_chunk(reasoning_piece)
+                reasoning_parts.append(reasoning_piece)
+
             piece = message.get("content", "")
             if piece:
                 if not streamed_text:
@@ -199,11 +209,15 @@ class Agent:
                 ui.print_stream_chunk(piece)
                 content_parts.append(piece)
 
+        if streamed_reasoning:
+            ui.print_reasoning_end()
+            last_message["thinking"] = "".join(reasoning_parts)
+
         if streamed_text:
             ui.print_stream_end()
             last_message["content"] = "".join(content_parts)
 
-        return {"message": last_message}, streamed_text
+        return {"message": last_message}, streamed_text, streamed_reasoning
 
     def on_model_switch(self) -> None:
         """Reset per-model runtime capability flags after switching model."""
@@ -310,8 +324,9 @@ class Agent:
         for _iteration in range(self.config.max_iterations):
             tools_payload = TOOL_DEFINITIONS if self._tools_supported else None
             streamed_text = False
+            streamed_reasoning = False
             try:
-                response, streamed_text = await self._chat_with_streaming(
+                response, streamed_text, streamed_reasoning = await self._chat_with_streaming(
                     messages=self.messages,
                     tools=tools_payload,
                 )
@@ -360,6 +375,11 @@ class Agent:
             content = message.get("content", "")
             tool_calls = message.get("tool_calls", [])
 
+            thinking = message.get("thinking", "")
+            if thinking and not streamed_reasoning:
+                ui.print_thinking(thinking)
+                self._append_task_log("assistant_reasoning", {"text": thinking[:1500]})
+
             # Add the assistant message to history
             self.messages.append(message)
 
@@ -403,6 +423,8 @@ class Agent:
             # No tool calls -- we have a final text response
             if content and not streamed_text:
                 ui.print_assistant(content)
+            if thinking and streamed_reasoning:
+                self._append_task_log("assistant_reasoning", {"text": thinking[:1500]})
             if content:
                 self._append_task_log("assistant_response", {"text": content[:1500]})
             return content

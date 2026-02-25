@@ -115,8 +115,11 @@ async def test_task_log_records_prompt_and_response(tmp_path, monkeypatch):
             yield {"message": {"role": "assistant", "content": " world"}}
 
     monkeypatch.setattr("puterui.ui.print_stream_start", lambda: None)
+    monkeypatch.setattr("puterui.ui.print_reasoning_start", lambda: None)
     monkeypatch.setattr("puterui.ui.print_stream_chunk", lambda _text: None)
+    monkeypatch.setattr("puterui.ui.print_reasoning_chunk", lambda _text: None)
     monkeypatch.setattr("puterui.ui.print_stream_end", lambda: None)
+    monkeypatch.setattr("puterui.ui.print_reasoning_end", lambda: None)
 
     agent.client = FakeClient()
     result = await agent.send("hi there")
@@ -139,8 +142,11 @@ async def test_streaming_response_skips_panel_print(tmp_path, monkeypatch):
 
     panel_calls: list[str] = []
     monkeypatch.setattr("puterui.ui.print_stream_start", lambda: None)
+    monkeypatch.setattr("puterui.ui.print_reasoning_start", lambda: None)
     monkeypatch.setattr("puterui.ui.print_stream_chunk", lambda _text: None)
+    monkeypatch.setattr("puterui.ui.print_reasoning_chunk", lambda _text: None)
     monkeypatch.setattr("puterui.ui.print_stream_end", lambda: None)
+    monkeypatch.setattr("puterui.ui.print_reasoning_end", lambda: None)
     monkeypatch.setattr("puterui.ui.print_assistant", lambda text: panel_calls.append(text))
 
     agent.client = FakeClient()
@@ -172,3 +178,31 @@ async def test_read_timeout_warning_hint(tmp_path, monkeypatch):
     result = await agent._run_agent_loop()
     assert "ReadTimeout" in result
     assert any("ollama_read_timeout" in msg for msg in warnings)
+
+
+@pytest.mark.asyncio
+async def test_reasoning_stream_is_rendered(tmp_path, monkeypatch):
+    agent = Agent(Config(), tmp_path)
+
+    class FakeClient:
+        async def chat_stream(self, messages, tools=None):
+            yield {"message": {"role": "assistant", "thinking": "step 1. "}}
+            yield {"message": {"role": "assistant", "thinking": "step 2. "}}
+            yield {"message": {"role": "assistant", "content": "Done"}}
+
+    reasoning_chunks: list[str] = []
+    monkeypatch.setattr("puterui.ui.print_stream_start", lambda: None)
+    monkeypatch.setattr("puterui.ui.print_stream_chunk", lambda _text: None)
+    monkeypatch.setattr("puterui.ui.print_stream_end", lambda: None)
+    monkeypatch.setattr("puterui.ui.print_reasoning_start", lambda: None)
+    monkeypatch.setattr(
+        "puterui.ui.print_reasoning_chunk",
+        lambda text: reasoning_chunks.append(text),
+    )
+    monkeypatch.setattr("puterui.ui.print_reasoning_end", lambda: None)
+
+    agent.client = FakeClient()
+    result = await agent.send("why")
+
+    assert result == "Done"
+    assert "".join(reasoning_chunks) == "step 1. step 2. "
